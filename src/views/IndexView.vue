@@ -15,14 +15,17 @@
           <div class="view-left-tool" title="保存弹幕" @click.stop="saveCastToFile">
             <i class="ice-save"></i>
           </div>
+          <div class="view-left-tool" title="分析存档" @click.stop="showAnalyzer = true">
+            <i class="ice-chart"></i>
+          </div>
         </div>
         <hr class="hr" />
         <LiveStatusPanel ref="panel" :status="connectStatus" />
       </div>
     </div>
     <div class="view-center">
-      <!-- 主要弹幕：聊天、礼物 -->
-      <CastList :types="['chat', 'gift']" ref="castEl" />
+      <!-- 主要弹幕：聊天、礼物、房间消息 -->
+      <CastList :types="['chat', 'gift', 'room']" :gift-threshold="giftThreshold" ref="castEl" />
     </div>
     <div class="view-right">
       <div class="view-input">
@@ -44,10 +47,31 @@
           :test="verifyWssUrl"
           @confirm="relayCast"
           @cancel="stopRelayCast" />
+        <div class="gift-threshold-input">
+          <label class="threshold-label">高价值礼物阈值</label>
+          <input 
+            type="number" 
+            v-model.number="giftThreshold" 
+            placeholder="1000"
+            min="0"
+            class="threshold-input" />
+        </div>
       </div>
       <div class="view-other">
         <!-- 其它弹幕：关注、点赞、进入、控制台等 -->
         <CastList ref="otherEl" :types="['social', 'like', 'member']" pos="left" no-prefix theme="dark" />
+      </div>
+      <div class="view-all">
+        <!-- 所有消息：包括特效、房间消息等 -->
+        <CastList ref="allEl" :types="['all']" pos="left" no-prefix theme="dark" />
+      </div>
+    </div>
+    
+    <!-- 分析器弹窗 -->
+    <div v-if="showAnalyzer" class="analyzer-modal" @click.self="showAnalyzer = false">
+      <div class="analyzer-content">
+        <AnalyzerView />
+        <button class="close-btn" @click="showAnalyzer = false">关闭</button>
       </div>
     </div>
   </div>
@@ -58,6 +82,7 @@ import ConnectInput from '@/components/ConnectInput.vue';
 import LiveInfo from '@/components/LiveInfo.vue';
 import LiveStatusPanel from '@/components/LiveStatusPanel.vue';
 import CastList from '@/components/CastList.vue';
+import AnalyzerView from './AnalyzerView.vue';
 import {
   CastMethod,
   DyCast,
@@ -75,7 +100,12 @@ import { getId } from '@/utils/idUtil';
 import { RelayCast } from '@/core/relay';
 import SkMessage from '@/components/Message';
 import { formatDate } from '@/utils/commonUtil';
+
+const showAnalyzer = ref(false);
 import FileSaver from '@/utils/fileUtil';
+
+// 高价值礼物阈值
+const giftThreshold = ref(1000);
 
 // 连接状态
 const connectStatus = ref<ConnectStatus>(0);
@@ -105,6 +135,8 @@ const likeCount = ref<string | number>('*****');
 const castRef = useTemplateRef('castEl');
 // 其它弹幕
 const otherRef = useTemplateRef('otherEl');
+// 所有其他消息
+const allRef = useTemplateRef('allEl');
 // 所有弹幕
 const allCasts: DyMessage[] = [];
 // 记录弹幕
@@ -181,6 +213,7 @@ const handleMessages = function (msgs: DyMessage[]) {
   const newCasts: DyMessage[] = [];
   const mainCasts: DyMessage[] = [];
   const otherCasts: DyMessage[] = [];
+  const allCastsNew: DyMessage[] = [];
   try {
     for (const msg of msgs) {
       if (!msg.id) continue;
@@ -223,12 +256,54 @@ const handleMessages = function (msgs: DyMessage[]) {
           setRoomCount(msg.room);
           break;
         case CastMethod.CONTROL:
-          if (msg?.room?.status !== RoomStatus.LIVING) {
-            // 已经下播
-            newCasts.push(msg);
-            otherCasts.push(msg);
-            disconnectLive();
+          // 显示状态变化消息
+          if (msg?.room?.status) {
+            const statusText = ['', '准备中', '直播中', '暂时离开', '已下播'][msg.room.status] || '未知';
+            addConsoleMessage(`直播状态变更: ${statusText}`);
+            
+            // 只有在非直播状态时才断开连接
+            if (msg.room.status !== RoomStatus.LIVING && msg.room.status !== RoomStatus.PAUSE) {
+              newCasts.push(msg);
+              otherCasts.push(msg);
+              // 延迟断开，让状态消息先显示
+              setTimeout(() => {
+                disconnectLive();
+              }, 500);
+            }
           }
+          break;
+        case CastMethod.ROOM_MESSAGE:
+          // 只有特定 bizScene 的 RoomMessage 显示在主列表
+          // 注意：msg.content 已经在 dycast.ts 中被格式化过了
+          newCasts.push(msg);
+          allCastsNew.push(msg);
+          // 只有这两种类型才添加到主列表
+          if (msg.bizScene === 'star_guard_activate_text' || msg.bizScene === 'subscribe_anchor_mvp_v2') {
+            mainCasts.push(msg);
+          }
+          break;
+        case CastMethod.NOTIFY_EFFECT:
+        case CastMethod.FANSCLUB:
+        case CastMethod.IN_ROOM_BANNER:
+        case CastMethod.ROOM_DATA_SYNC:
+        case CastMethod.ACTIVITY_EMOJI_GROUPS:
+        case CastMethod.GIFT_SORT:
+        case CastMethod.UPDATE_FAN_TICKET:
+        case CastMethod.INTERACT_EFFECT:
+        case CastMethod.RANKLIST_HOUR_ENTRANCE:
+        case CastMethod.CHAT_LIKE:
+        case CastMethod.ROOM_STREAM_ADAPTATION:
+        case CastMethod.TOP_EFFECT:
+        case CastMethod.ROOM_INTRO:
+        case CastMethod.SANDWICH_BORDER:
+        case CastMethod.NOTIFY:
+        case CastMethod.ROOM_NOTIFY:
+        case CastMethod.QUIZ_AUDIENCE_STATUS:
+        case CastMethod.TEMP_STATE_AREA_REACH:
+        case CastMethod.CORNER_REACH:
+          // 其他消息类型显示在 all 列表
+          newCasts.push(msg);
+          allCastsNew.push(msg);
           break;
       }
     }
@@ -237,6 +312,7 @@ const handleMessages = function (msgs: DyMessage[]) {
   allCasts.push(...newCasts);
   if (castRef.value) castRef.value.appendCasts(mainCasts);
   if (otherRef.value) otherRef.value.appendCasts(otherCasts);
+  if (allRef.value) allRef.value.appendCasts(allCastsNew);
   if (relayWs && relayWs.isConnected()) {
     relayWs.send(JSON.stringify(msgs));
   }
@@ -278,6 +354,14 @@ const connectLive = function () {
     CLog.debug('正在连接:', roomNum.value);
     SkMessage.info(`正在连接：${roomNum.value}`);
     const cast = new DyCast(roomNum.value);
+    
+    // 可选：启用存档功能用于调试
+    // cast.enableArchive({
+    //   autoExport: false,
+    //   includeDecoded: false,
+    //   maxMessages: 10000
+    // });
+    
     cast.on('open', (ev, info) => {
       CLog.info('DyCast 房间连接成功');
       SkMessage.success(`房间连接成功[${roomNum.value}]`);
@@ -294,8 +378,37 @@ const connectLive = function () {
     });
     cast.on('close', (code, reason) => {
       CLog.info(`DyCast 房间已关闭[${code}] => ${reason}`);
+      
       connectStatus.value = 3;
       setRoomInputStatus(false);
+      
+      // 断开连接后自动保存弹幕
+      if (allCasts.length > 0) {
+        const date = formatDate(new Date(), 'yyyy-MM-dd_HHmmss');
+        const fileName = `[${roomNum.value}]${date}(${allCasts.length})`;
+        const data = JSON.stringify(allCasts, null, 2);
+        FileSaver.save(data, {
+          name: fileName,
+          ext: '.json',
+          mimeType: 'application/json',
+          description: '弹幕数据',
+          existStrategy: 'new'
+        })
+          .then(res => {
+            if (res.success) {
+              SkMessage.success(`弹幕已自动保存 (${allCasts.length} 条)`);
+              CLog.info('弹幕自动保存成功');
+            } else {
+              SkMessage.error('弹幕自动保存失败');
+              CLog.error('弹幕自动保存失败 =>', res.message);
+            }
+          })
+          .catch(err => {
+            SkMessage.error('弹幕自动保存出错');
+            CLog.error('弹幕自动保存出错 =>', err);
+          });
+      }
+      
       switch (code) {
         case DyCastCloseCode.NORMAL:
           SkMessage.success('断开成功');
@@ -320,19 +433,36 @@ const connectLive = function () {
       handleMessages(msgs);
     });
     cast.on('reconnecting', (count, code, reason) => {
+      const maxCount = 5; // 与 dycast.ts 中的 maxReconnectCount 保持一致
+      let statusMsg = '';
+      
+      // 获取当前直播间状态
+      const liveInfo = cast.getLiveInfo();
+      if (liveInfo.status === 2) {
+        statusMsg = '直播中';
+      } else if (liveInfo.status === 3) {
+        statusMsg = '暂时离开';
+      }
+      
       switch (code) {
         case DyCastCloseCode.CANNOT_RECEIVE:
-          // 无法正常接收信息
-          SkMessage.warning('无法正常接收弹幕，准备重连中');
+          SkMessage.warning(`无法正常接收弹幕(${statusMsg})，正在重连: ${count}/${maxCount}`);
+          addConsoleMessage(`连接异常，正在尝试第 ${count} 次重连...`);
+          break;
+        case DyCastCloseCode.RECONNECTING:
+          SkMessage.warning(`连接断开(${statusMsg})，正在重连: ${count}/${maxCount}`);
+          addConsoleMessage(`连接断开，正在尝试第 ${count} 次重连...`);
           break;
         default:
-          CLog.warn('DyCast 重连中 =>', count);
-          SkMessage.warning(`正在重连中: ${count}`);
+          CLog.warn('DyCast 重连中 =>', count, reason);
+          SkMessage.warning(`正在重连中(${statusMsg}): ${count}/${maxCount}`);
+          addConsoleMessage(`正在尝试第 ${count} 次重连...`);
       }
     });
     cast.on('reconnect', ev => {
       CLog.info('DyCast 重连成功');
       SkMessage.success('房间重连完成');
+      addConsoleMessage('重连成功，继续接收弹幕');
     });
     cast.connect();
     castWs = cast;
@@ -394,12 +524,8 @@ const stopRelayCast = function () {
   if (relayWs) relayWs.close(1000);
 };
 
-/** 将弹幕保存到本地文件 */
+/** 将弹幕保存到本地文件（手动保存） */
 const saveCastToFile = function () {
-  if (connectStatus.value === 1) {
-    SkMessage.warning('请断开连接后再保存');
-    return;
-  }
   const len = allCasts.length;
   if (len <= 0) {
     SkMessage.warning('暂无弹幕需要保存');
@@ -516,12 +642,51 @@ $tool: #8b968d;
     flex-direction: column;
     gap: 5px;
   }
+  .gift-threshold-input {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: #fff;
+    border-radius: 4px;
+    border: 1px solid $bd;
+    .threshold-label {
+      font-family: 'mkwxy';
+      font-size: 0.9rem;
+      color: #666;
+      white-space: nowrap;
+    }
+    .threshold-input {
+      flex: 1;
+      border: 1px solid #ddd;
+      border-radius: 3px;
+      padding: 4px 8px;
+      font-size: 0.9rem;
+      font-family: 'mkwxy';
+      outline: none;
+      transition: border-color 0.2s;
+      &:focus {
+        border-color: $theme;
+      }
+      &::placeholder {
+        color: #ccc;
+      }
+    }
+  }
   .view-other {
     display: flex;
     width: 100%;
     height: 0;
     flex-grow: 1;
     box-sizing: border-box;
+  }
+  .view-all {
+    display: flex;
+    width: 100%;
+    height: 0;
+    flex-grow: 1;
+    box-sizing: border-box;
+    margin-top: 5px;
   }
 }
 
@@ -559,5 +724,48 @@ $tool: #8b968d;
       left: 0;
     }
   }
+}
+
+.analyzer-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.analyzer-content {
+  background: white;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 1200px;
+  max-height: 90vh;
+  overflow: auto;
+  position: relative;
+}
+
+.close-btn {
+  position: sticky;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 30px;
+  background: #409eff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  margin: 20px auto;
+  display: block;
+}
+
+.close-btn:hover {
+  background: #66b1ff;
 }
 </style>

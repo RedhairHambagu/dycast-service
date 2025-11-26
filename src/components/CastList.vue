@@ -36,7 +36,8 @@
               :user="item.user"
               :gift="item.gift"
               :content="item.content"
-              :rtf-content="item.rtfContent" />
+              :rtf-content="item.rtfContent"
+              :gift-threshold="giftThreshold" />
           </DynamicScrollerItem>
         </template>
       </DynamicScroller>
@@ -63,10 +64,12 @@ interface CastListProps {
   types?: CastType[];
   pos?: 'center' | 'left';
   noPrefix?: boolean;
+  giftThreshold?: number;
 }
 
 const props = withDefaults(defineProps<CastListProps>(), {
   types: () => [],
+  giftThreshold: 1000,
   noPrefix: false,
   pos: 'center'
 });
@@ -103,6 +106,8 @@ const setCastType = function (type: CastType, flag?: boolean) {
   switch (type) {
     case 'chat':
       typeMap.set(CastMethod.CHAT, !!flag);
+      typeMap.set(CastMethod.SCREEN_CHAT, !!flag);
+      typeMap.set(CastMethod.PRIVILEGE_SCREEN_CHAT, !!flag);
       typeMap.set(CastMethod.EMOJI_CHAT, !!flag);
       break;
     case 'gift':
@@ -116,6 +121,32 @@ const setCastType = function (type: CastType, flag?: boolean) {
       break;
     case 'member':
       typeMap.set(CastMethod.MEMBER, !!flag);
+      break;
+    case 'room':
+      typeMap.set(CastMethod.ROOM_MESSAGE, !!flag);
+      break;
+    case 'all':
+      // 'all' 类型显示所有消息类型
+      typeMap.set(CastMethod.NOTIFY_EFFECT, !!flag);
+      typeMap.set(CastMethod.FANSCLUB, !!flag);
+      typeMap.set(CastMethod.IN_ROOM_BANNER, !!flag);
+      typeMap.set(CastMethod.ROOM_DATA_SYNC, !!flag);
+      typeMap.set(CastMethod.ACTIVITY_EMOJI_GROUPS, !!flag);
+      typeMap.set(CastMethod.GIFT_SORT, !!flag);
+      typeMap.set(CastMethod.UPDATE_FAN_TICKET, !!flag);
+      typeMap.set(CastMethod.INTERACT_EFFECT, !!flag);
+      typeMap.set(CastMethod.RANKLIST_HOUR_ENTRANCE, !!flag);
+      typeMap.set(CastMethod.CHAT_LIKE, !!flag);
+      // typeMap.set(CastMethod.ROOM_STREAM_ADAPTATION, !!flag);
+      typeMap.set(CastMethod.TOP_EFFECT, !!flag);
+      typeMap.set(CastMethod.ROOM_INTRO, !!flag);
+      typeMap.set(CastMethod.SANDWICH_BORDER, !!flag);
+      typeMap.set(CastMethod.NOTIFY, !!flag);
+      typeMap.set(CastMethod.ROOM_NOTIFY, !!flag);
+      typeMap.set(CastMethod.QUIZ_AUDIENCE_STATUS, !!flag);
+      typeMap.set(CastMethod.TEMP_STATE_AREA_REACH, !!flag);
+      typeMap.set(CastMethod.CORNER_REACH, !!flag);
+      typeMap.set(CastMethod.ROOM_MESSAGE, !!flag);
       break;
   }
 };

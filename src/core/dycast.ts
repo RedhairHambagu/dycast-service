@@ -2,18 +2,38 @@ import { CLog } from '@/utils/logUtil';
 import { Emitter, type EventMap } from './emitter';
 import pako from 'pako';
 import {
+  decodeActivityEmojiGroupsMessage,
+  decodeChatLikeMessage,
   decodeChatMessage,
   decodeControlMessage,
+  decodeCornerReachMessage,
   decodeEmojiChatMessage,
+  decodeFansclubMessage,
   decodeGiftMessage,
+  decodeGiftSortMessage,
+  decodeInRoomBannerMessage,
+  decodeInteractEffectMessage,
   decodeLikeMessage,
   decodeMemberMessage,
+  decodeNotifyEffectMessage,
+  decodeNotifyMessage,
   decodePushFrame,
+  decodeQuizAudienceStatusMessage,
+  decodeRanklistHourEntranceMessage,
   decodeResponse,
+  decodeRoomDataSyncMessage,
+  decodeRoomIntroMessage,
+  decodeRoomMessage,
+  decodeRoomNotifyMessage,
   decodeRoomRankMessage,
   decodeRoomStatsMessage,
+  decodeRoomStreamAdaptationMessage,
   decodeRoomUserSeqMessage,
+  decodeSandwichBorderMessage,
   decodeSocialMessage,
+  decodeTempStateAreaReachMessage,
+  decodeTopEffectMessage,
+  decodeUpdateFanTicketMessage,
   encodePushFrame
 } from './model';
 import type {
@@ -27,6 +47,8 @@ import type {
 import { getImInfo, getLiveInfo } from './request';
 import { getSignature } from './signature';
 import { logUserCast } from '@/utils/debugUtil';
+import { MessageDebugger } from '@/utils/messageDebugger';
+import { MessageArchiver } from '@/utils/messageArchiver';
 
 /**
  * 连接状态
@@ -93,6 +115,8 @@ export interface LiveRankItem {
 export interface CastUser {
   // user.sec_uid | user.id_str
   id?: string;
+  // user.display_id
+  displayId?: string;
   // user.nickname
   name?: string;
   // user.avatar_thumb.url_list.0
@@ -145,10 +169,13 @@ export interface DyMessage {
   rtfContent?: CastRtfContent[];
   room?: LiveRoom;
   rank?: LiveRankItem[];
+  bizScene?: string;
 }
 
 export enum CastMethod {
   CHAT = 'WebcastChatMessage',
+  SCREEN_CHAT = 'WebcastScreenChatMessage',
+  PRIVILEGE_SCREEN_CHAT = 'WebcastPrivilegeScreenChatMessage',
   GIFT = 'WebcastGiftMessage',
   LIKE = 'WebcastLikeMessage',
   MEMBER = 'WebcastMemberMessage',
@@ -159,7 +186,26 @@ export enum CastMethod {
   ROOM_STATS = 'WebcastRoomStatsMessage',
   EMOJI_CHAT = 'WebcastEmojiChatMessage',
   FANSCLUB = 'WebcastFansclubMessage',
+  ROOM_MESSAGE = 'WebcastRoomMessage',
+  IN_ROOM_BANNER = 'WebcastInRoomBannerMessage',
   ROOM_DATA_SYNC = 'WebcastRoomDataSyncMessage',
+  ACTIVITY_EMOJI_GROUPS = 'WebcastActivityEmojiGroupsMessage',
+  GIFT_SORT = 'WebcastGiftSortMessage',
+  UPDATE_FAN_TICKET = 'WebcastUpdateFanTicketMessage',
+  INTERACT_EFFECT = 'WebcastInteractEffectMessage',
+  RANKLIST_HOUR_ENTRANCE = 'WebcastRanklistHourEntranceMessage',
+  CHAT_LIKE = 'WebcastChatLikeMessage',
+  // ROOM_STREAM_ADAPTATION = 'WebcastRoomStreamAdaptationMessage',
+  TOP_EFFECT = 'WebcastTopEffectMessage',
+  ROOM_INTRO = 'WebcastRoomIntroMessage',
+  SANDWICH_BORDER = 'WebcastSandwichBorderMessage',
+  NOTIFY_EFFECT = 'WebcastNotifyEffectMessage',
+  NOTIFY = 'WebcastNotifyMessage',
+  ROOM_NOTIFY = 'WebcastRoomNotifyMessage',
+  ROOM_INDICATOR = 'WebcastRoomIndicatorMessage',
+  QUIZ_AUDIENCE_STATUS = 'WebcastQuizAudienceStatusMessage',
+  TEMP_STATE_AREA_REACH = 'WebcastTempStateAreaReachMessage',
+  CORNER_REACH = 'WebcastCornerReachMessage',
   /** 自定义消息 */
   CUSTOM = 'CustomMessage'
 }
@@ -408,9 +454,17 @@ export class DyCast {
   private shouldReconnect: boolean;
   // 正在重连中
   private isReconnecting: boolean;
+  // 重连延迟定时器
+  private reconnectTimer: number | undefined;
 
   // 订阅者
   private emitter: Emitter<DyCastEvent>;
+
+  // 消息调试器
+  public debugger: MessageDebugger;
+
+  // 消息存档器
+  public archiver: MessageArchiver | null;
 
   constructor(roomNum: string) {
     // 初始化
@@ -427,8 +481,8 @@ export class DyCast {
     };
     // 当前重连次数
     this.reconnectCount = 0;
-    // 最大重连次数
-    this.maxReconnectCount = 3;
+    // 最大重连次数（增加到5次）
+    this.maxReconnectCount = 5;
     // 上一次接收消息时间
     this.lastReceiveTime = Date.now();
     // 当前客户端状态
@@ -452,6 +506,8 @@ export class DyCast {
     this.status = RoomStatus.END;
     this.emitter = new Emitter<DyCastEvent>();
     this.isReconnecting = false;
+    this.debugger = new MessageDebugger(false, 5);
+    this.archiver = null; // 默认不启用，需要手动创建
   }
 
   /**
@@ -577,6 +633,9 @@ export class DyCast {
   private handleClose(ev: CloseEvent) {
     let { code, reason } = ev;
     let msg: string = reason.toString();
+    
+    CLog.info(`WebSocket 关闭事件: code=${code}, reason=${reason}, closeEvent.code=${this.closeEvent.code}`);
+    
     switch (code) {
       case DyCastCloseCode.NO_STATUS:
       case DyCastCloseCode.ABNORMAL:
@@ -584,13 +643,42 @@ export class DyCast {
         msg = this.closeEvent.msg || msg || 'closed';
         break;
     }
+    
+    // 判断是否为正常关闭（用户主动断开）
+    const isNormalClose = code === DyCastCloseCode.NORMAL;
+    
+    CLog.info(`关闭分析: isNormalClose=${isNormalClose}, shouldReconnect=${this.shouldReconnect}, reconnectCount=${this.reconnectCount}, status=${this.status}`);
+    
     this._afterClose();
-    if (this.shouldReconnect || this.reconnectCount > 0) {
-      // 需要重连
-      this.reconnect();
-    } else {
-      // 正常关闭
+    
+    // 智能判断是否需要重连
+    // 1. 如果是正常关闭（用户主动断开），不重连
+    // 2. 如果已经在重连过程中，继续重连
+    // 3. 如果是异常断开，检查直播间状态决定是否重连
+    if (isNormalClose) {
+      // 用户主动断开，不重连
+      CLog.info('用户主动断开连接，不进行重连');
       this.emitter.emit('close', code, msg);
+    } else if (this.shouldReconnect || this.reconnectCount > 0) {
+      // 已经在重连过程中，继续重连
+      CLog.info('检测到重连标志，检查直播间状态...');
+      if (this.shouldKeepConnection()) {
+        CLog.info(`直播间状态: ${this.getLiveStatus().msg}，继续重连`);
+        this.reconnectWithDelay();
+      } else {
+        CLog.info(`直播间状态为 ${this.getLiveStatus().msg}，停止重连`);
+        this.emitter.emit('close', code, msg);
+      }
+    } else {
+      // 首次异常断开，检查是否需要重连
+      CLog.info('首次异常断开，检查是否需要重连...');
+      if (this.shouldKeepConnection()) {
+        CLog.info(`连接异常断开，直播间状态: ${this.getLiveStatus().msg}，准备重连`);
+        this.reconnectWithDelay();
+      } else {
+        CLog.info(`连接断开，直播间状态为 ${this.getLiveStatus().msg}，不进行重连`);
+        this.emitter.emit('close', code, msg);
+      }
     }
   }
 
@@ -635,6 +723,56 @@ export class DyCast {
   }
 
   /**
+   * 带延迟的重连
+   */
+  private reconnectWithDelay() {
+    this.reconnectCount++;
+    if (this.reconnectCount > this.maxReconnectCount) {
+      CLog.error('已超过最大重连次数，请稍后重试');
+      this.emitter.emit('error', Error('已超过最大重连次数，请稍后重试'));
+      this.emitter.emit('close', DyCastCloseCode.CONNECTING_ERROR, '重连失败');
+      return;
+    }
+    
+    // 计算重连延迟（指数退避）
+    const delay = this.getReconnectDelay();
+    CLog.info(`将在 ${delay}ms 后进行第 ${this.reconnectCount} 次重连`);
+    
+    this.wsRoomStatus = WSRoomStatus.RECONNECTING;
+    this.emitter.emit('reconnecting', this.reconnectCount, this.closeEvent.code, this.closeEvent.msg);
+    
+    // 延迟后重连
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectWithStatusCheck();
+    }, delay);
+  }
+
+  /**
+   * 重连前检查状态
+   */
+  private async reconnectWithStatusCheck() {
+    try {
+      // 重连前先获取最新的直播间状态
+      await this.fetchConnectInfo(this.roomNum);
+      
+      if (this.shouldKeepConnection()) {
+        // 状态仍为直播中或暂时离开，执行重连
+        CLog.info(`直播间状态: ${this.getLiveStatus().msg}，开始重连`);
+        this.reconnect();
+      } else {
+        // 状态已变化（准备中或已下播），取消重连
+        CLog.info(`直播间状态已变为 ${this.getLiveStatus().msg}，取消重连`);
+        this.reconnectCount = 0;
+        this.emitter.emit('close', DyCastCloseCode.LIVE_END, this.getLiveStatus().msg);
+      }
+    } catch (err) {
+      // 获取状态失败，仍尝试重连（可能是网络问题）
+      CLog.warn('获取直播间状态失败，仍尝试重连', err);
+      this.reconnect();
+    }
+  }
+
+  /**
    * 重连
    */
   private reconnect() {
@@ -647,16 +785,26 @@ export class DyCast {
       cursor: this.cursor.cursor,
       internal_ext: this.cursor.internalExt
     });
-    this.reconnectCount++;
-    if (this.reconnectCount > this.maxReconnectCount) {
-      CLog.error('已超过最大重连次数，请稍后重试');
-      this.emitter.emit('error', Error('已超过最大重连次数，请稍后重试'));
-      return;
-    }
+    
     this.wsRoomStatus = WSRoomStatus.RECONNECTING;
-    this.emitter.emit('reconnecting', this.reconnectCount);
     this.isReconnecting = true;
     this._connect(opts);
+  }
+
+  /**
+   * 计算重连延迟（指数退避策略）
+   */
+  private getReconnectDelay(): number {
+    // 1s, 2s, 4s, 8s, 16s
+    return Math.min(1000 * Math.pow(2, this.reconnectCount - 1), 16000);
+  }
+
+  /**
+   * 判断是否应该保持连接
+   * LIVING 和 PAUSE 状态需要保持连接
+   */
+  private shouldKeepConnection(): boolean {
+    return this.status === RoomStatus.LIVING || this.status === RoomStatus.PAUSE;
   }
 
   /**
@@ -666,6 +814,11 @@ export class DyCast {
     if (this.ws) {
       this.state = !1;
       this.closeEvent = { code, msg: reason };
+      // 清除重连标志（手动关闭时不应重连）
+      if (code === DyCastCloseCode.NORMAL) {
+        this.shouldReconnect = !1;
+        this.reconnectCount = 0;
+      }
       // 无需传 code，因为抖音弹幕ws服务端并不会处理关闭帧
       this.ws.close();
       this.ws = void 0;
@@ -702,13 +855,19 @@ export class DyCast {
    *  - 长时间未接收到消息
    */
   private cannotReceiveMessage() {
-    // 先关闭
-    this.close(DyCastCloseCode.CANNOT_RECEIVE, '客户端无法正常接收信息');
     let tmp = Date.now() - this.lastReceiveTime;
     CLog.error(`DyCast Cannot Receive Message => after ${tmp} ms`);
-    // 重连
-    this.emitter.emit('reconnecting', this.reconnectCount, DyCastCloseCode.CANNOT_RECEIVE, '客户端无法正常接收信息');
-    this.reconnectCount < this.maxReconnectCount && (this.shouldReconnect = !0);
+    
+    // 检查是否应该重连
+    if (this.shouldKeepConnection()) {
+      // 直播中或暂时离开，需要重连
+      this.close(DyCastCloseCode.CANNOT_RECEIVE, '客户端无法正常接收信息');
+      this.shouldReconnect = !0;
+    } else {
+      // 直播已结束，正常关闭
+      CLog.info(`直播间状态为 ${this.getLiveStatus().msg}，不进行重连`);
+      this.close(DyCastCloseCode.LIVE_END, this.getLiveStatus().msg);
+    }
   }
 
   /**
@@ -751,6 +910,9 @@ export class DyCast {
     let message = null;
     let payload = msg.payload;
     if (!payload) return null;
+    
+    let processed = false;
+    
     try {
       // 处理消息
       switch (method) {
@@ -761,12 +923,36 @@ export class DyCast {
           data.content = message.content;
           // 获取富文本：包含合并表情
           data.rtfContent = this._getCastRtfContent(message.rtfContentV2);
+          processed = true;
+          break;
+        case CastMethod.SCREEN_CHAT:
+          // 飘屏消息，结构和普通聊天消息一样，使用相同的解码器
+          message = decodeChatMessage(payload);
+          data.method = CastMethod.SCREEN_CHAT;
+          data.user = this._getCastUser(message.user);
+          // 在内容前添加飘屏标识
+          data.content = `[飘屏] ${message.content}`;
+          // 获取富文本：包含合并表情
+          data.rtfContent = this._getCastRtfContent(message.rtfContentV2);
+          processed = true;
+          break;
+        case CastMethod.PRIVILEGE_SCREEN_CHAT:
+          // 特权飘屏消息（会员专属），结构和普通聊天消息一样
+          message = decodeChatMessage(payload);
+          data.method = CastMethod.PRIVILEGE_SCREEN_CHAT;
+          data.user = this._getCastUser(message.user);
+          // 直接显示内容，不添加前缀（通过样式区分）
+          data.content = message.content;
+          // 获取富文本：包含合并表情
+          data.rtfContent = this._getCastRtfContent(message.rtfContentV2);
+          processed = true;
           break;
         case CastMethod.GIFT:
           message = decodeGiftMessage(payload);
           data.method = CastMethod.GIFT;
           data.user = this._getCastUser(message.user);
           data.gift = this._getCastGift(message.gift, message.repeatCount || message.comboCount, message.repeatEnd);
+          processed = true;
           break;
         case CastMethod.LIKE:
           message = decodeLikeMessage(payload);
@@ -774,6 +960,7 @@ export class DyCast {
           data.user = this._getCastUser(message.user);
           data.content = `为主播点赞了(${message.count})`;
           data.room = { likeCount: message.total };
+          processed = true;
           break;
         case CastMethod.MEMBER:
           message = decodeMemberMessage(payload);
@@ -781,6 +968,7 @@ export class DyCast {
           data.user = this._getCastUser(message.user);
           data.content = '进入直播间';
           data.room = { audienceCount: message.memberCount };
+          processed = true;
           break;
         case CastMethod.SOCIAL:
           message = decodeSocialMessage(payload);
@@ -788,36 +976,293 @@ export class DyCast {
           data.user = this._getCastUser(message.user);
           data.content = '关注了主播';
           data.room = { followCount: message.followCount };
+          processed = true;
           break;
         case CastMethod.EMOJI_CHAT:
           message = decodeEmojiChatMessage(payload);
           data.method = CastMethod.EMOJI_CHAT;
           data.user = this._getCastUser(message.user);
           data.content = this._getCastEmoji(message.emojiContent);
+          processed = true;
           break;
         case CastMethod.ROOM_USER_SEQ:
           message = decodeRoomUserSeqMessage(payload);
           data.method = CastMethod.ROOM_USER_SEQ;
           data.rank = this._getCastRanksA(message.ranks);
           data.room = { audienceCount: message.total, totalUserCount: message.totalUser };
+          processed = true;
           break;
         case CastMethod.CONTROL:
           message = decodeControlMessage(payload);
           data.method = CastMethod.CONTROL;
           data.content = message.common?.describe;
-          data.room = { status: parseInt(message.action || '') || void 0 };
+          const newStatus = parseInt(message.action || '') || void 0;
+          data.room = { status: newStatus };
+          
+          // 更新本地状态
+          if (newStatus) {
+            const oldStatus = this.status;
+            this.status = newStatus;
+            CLog.info(`直播间状态变更: ${oldStatus} -> ${newStatus} (${this.getLiveStatus().msg})`);
+          }
+          
+          processed = true;
           break;
         case CastMethod.ROOM_RANK:
           message = decodeRoomRankMessage(payload);
           data.method = CastMethod.ROOM_RANK;
           data.rank = this._getCastRanksB(message.ranks);
+          processed = true;
           break;
         case CastMethod.ROOM_STATS:
           message = decodeRoomStatsMessage(payload);
           data.method = CastMethod.ROOM_STATS;
           data.room = { audienceCount: message.displayMiddle };
+          processed = true;
+          break;
+        case CastMethod.NOTIFY_EFFECT:
+          message = decodeNotifyEffectMessage(payload);
+          data.method = CastMethod.NOTIFY_EFFECT;
+          
+          // 提取文本内容
+          // 优先级：textV2.displayItems[displayItemType=2].textItem.text > text > 默认值
+          let notifyContent = '';
+          
+          if (message.textV2?.displayItems && message.textV2.displayItems.length > 0) {
+            // 查找 displayItemType 为 2 的项（textItem）
+            const textDisplayItem = message.textV2.displayItems.find(
+              item => item.displayItemType === 2 || item.textItem
+            );
+            
+            if (textDisplayItem?.textItem?.text) {
+              const formatted = this._formatDisplayText(textDisplayItem.textItem.text);
+              if (formatted) {
+                notifyContent = formatted;
+              }
+            }
+          }
+          
+          // 如果没有从 textV2 提取到，尝试从 text 提取
+          if (!notifyContent && message.text) {
+            notifyContent = this._getCastRtfContent(message.text)?.map(p => p.text).join('') || '';
+          }
+          
+          // 最后的默认值
+          data.content = notifyContent || '特效通知';
+          processed = true;
+          break;
+        case CastMethod.ROOM_MESSAGE:
+          message = decodeRoomMessage(payload);
+          data.method = CastMethod.ROOM_MESSAGE;
+          data.bizScene = message.bizScene;
+          
+          // 格式化消息内容（优先级：displayText > content > bizScene）
+          const displayText = message.common?.displayText;
+          if (displayText) {
+            data.content = this._formatDisplayText(displayText);
+          }
+          if (!data.content) {
+            data.content = message.content;
+          }
+          if (!data.content) {
+            data.content = message.bizScene || '房间消息';
+          }
+          
+          processed = true;
+          break;
+        case CastMethod.FANSCLUB:
+          message = decodeFansclubMessage(payload);
+          
+          // 检查 displayText.key 是否为 fansclub_participate_v2
+          const fansclubDisplayText = message.commonInfo?.displayText;
+          const shouldShow = fansclubDisplayText?.key === 'fansclub_participate_v2';
+          
+          if (!shouldShow) {
+            // 不推送到主区域，直接返回 null
+            processed = true;
+            return null;
+          }
+          
+          data.method = CastMethod.FANSCLUB;
+          data.user = this._getCastUser(message.user);
+          
+          // 尝试从 commonInfo.displayText 获取格式化内容
+          if (fansclubDisplayText) {
+            const formatted = this._formatDisplayText(fansclubDisplayText);
+            if (formatted) {
+              data.content = formatted;
+            }
+          }
+          if (!data.content) {
+            data.content = '加入粉丝团';
+          }
+          
+          processed = true;
+          break;
+        case CastMethod.IN_ROOM_BANNER:
+          message = decodeInRoomBannerMessage(payload);
+          data.method = CastMethod.IN_ROOM_BANNER;
+          data.content = '横幅消息';
+          processed = true;
+          break;
+        case CastMethod.ROOM_DATA_SYNC:
+          message = decodeRoomDataSyncMessage(payload);
+          data.method = CastMethod.ROOM_DATA_SYNC;
+          data.content = '数据同步';
+          processed = true;
+          break;
+        case CastMethod.ACTIVITY_EMOJI_GROUPS:
+          message = decodeActivityEmojiGroupsMessage(payload);
+          data.method = CastMethod.ACTIVITY_EMOJI_GROUPS;
+          data.content = '活动表情';
+          processed = true;
+          break;
+        case CastMethod.GIFT_SORT:
+          message = decodeGiftSortMessage(payload);
+          data.method = CastMethod.GIFT_SORT;
+          data.content = '礼物排序';
+          processed = true;
+          break;
+        case CastMethod.UPDATE_FAN_TICKET:
+          message = decodeUpdateFanTicketMessage(payload);
+          data.method = CastMethod.UPDATE_FAN_TICKET;
+          data.content = '粉丝票更新';
+          processed = true;
+          break;
+        case CastMethod.INTERACT_EFFECT:
+          message = decodeInteractEffectMessage(payload);
+          data.method = CastMethod.INTERACT_EFFECT;
+          data.content = '互动特效';
+          processed = true;
+          break;
+        case CastMethod.RANKLIST_HOUR_ENTRANCE:
+          message = decodeRanklistHourEntranceMessage(payload);
+          data.method = CastMethod.RANKLIST_HOUR_ENTRANCE;
+          data.content = '小时榜入口';
+          processed = true;
+          break;
+        case CastMethod.CHAT_LIKE:
+          message = decodeChatLikeMessage(payload);
+          data.method = CastMethod.CHAT_LIKE;
+          data.content = '聊天点赞';
+          processed = true;
+          break;
+        // case CastMethod.ROOM_STREAM_ADAPTATION:
+        //   message = decodeRoomStreamAdaptationMessage(payload);
+        //   data.method = CastMethod.ROOM_STREAM_ADAPTATION;
+        //   data.content = '流适配';
+        //   processed = true;
+        //   break;
+        case CastMethod.TOP_EFFECT:
+          message = decodeTopEffectMessage(payload);
+          data.method = CastMethod.TOP_EFFECT;
+          data.content = '顶部特效';
+          processed = true;
+          break;
+        case CastMethod.ROOM_INTRO:
+          message = decodeRoomIntroMessage(payload);
+          data.method = CastMethod.ROOM_INTRO;
+          data.content = '房间介绍';
+          processed = true;
+          break;
+        case CastMethod.SANDWICH_BORDER:
+          message = decodeSandwichBorderMessage(payload);
+          data.method = CastMethod.SANDWICH_BORDER;
+          data.content = '边框消息';
+          processed = true;
+          break;
+        case CastMethod.NOTIFY:
+          message = decodeNotifyMessage(payload);
+          data.method = CastMethod.NOTIFY;
+          data.content = '通知';
+          processed = true;
+          break;
+        case CastMethod.ROOM_NOTIFY:
+          message = decodeRoomNotifyMessage(payload);
+          data.method = CastMethod.ROOM_NOTIFY;
+          
+          // 尝试从 common.displayText 获取格式化内容
+          const roomNotifyDisplayText = message.common?.displayText;
+          if (roomNotifyDisplayText) {
+            const formatted = this._formatDisplayText(roomNotifyDisplayText);
+            if (formatted) {
+              data.content = formatted;
+            }
+          }
+          
+          // 如果没有格式化内容，使用 content 字段
+          if (!data.content && message.content) {
+            data.content = message.content;
+          }
+          
+          // 最后的默认值
+          if (!data.content) {
+            data.content = '房间通知';
+          }
+          
+          // 获取用户信息（如果有）
+          if (message.user) {
+            data.user = this._getCastUser(message.user);
+          }
+          
+          processed = true;
+          break;
+        case CastMethod.QUIZ_AUDIENCE_STATUS:
+          message = decodeQuizAudienceStatusMessage(payload);
+          data.method = CastMethod.QUIZ_AUDIENCE_STATUS;
+          data.content = '问答状态';
+          processed = true;
+          break;
+        case CastMethod.TEMP_STATE_AREA_REACH:
+          message = decodeTempStateAreaReachMessage(payload);
+          data.method = CastMethod.TEMP_STATE_AREA_REACH;
+          data.content = '临时状态';
+          processed = true;
+          break;
+        case CastMethod.CORNER_REACH:
+          message = decodeCornerReachMessage(payload);
+          data.method = CastMethod.CORNER_REACH;
+          data.content = '角落到达';
+          processed = true;
+          break;
+        case CastMethod.ROOM_INDICATOR:
+          // WebcastRoomIndicatorMessage 解码器暂未实现
+          // 记录到调试器但不处理
+          this.debugger.record(method || 'WebcastRoomIndicatorMessage', { 
+            method, 
+            msgId: msg.msgId,
+            note: 'Decoder not implemented yet' 
+          }, false);
+          // 存档原始数据
+          if (this.archiver) {
+            this.archiver.archive(method || 'WebcastRoomIndicatorMessage', msg.msgId || '', payload, null);
+          }
+          return null;
+        default:
+          // 未处理的消息类型
+          if (method) {
+            // 尝试解码以获取原始数据用于调试
+            try {
+              // 这里可以根据 method 动态解码，但为了简单，我们只记录类型
+              this.debugger.record(method, { method, msgId: msg.msgId }, false);
+            } catch (e) {
+              // 解码失败也记录
+              this.debugger.record(method || 'UNKNOWN', { error: 'decode failed' }, false);
+            }
+          }
           break;
       }
+      
+      // 记录已处理的消息
+      if (processed && method) {
+        this.debugger.record(method, message, true);
+      }
+      
+      // 只存档未处理的消息
+      if (!processed && method && msg.msgId && this.archiver) {
+        this.archiver.archive(method, msg.msgId, payload, message);
+      }
+      
       if (!data.method) return null;
     } catch (err) {
       // MLog.error('DyCast Message Decode Error =>', method);
@@ -871,6 +1316,7 @@ export class DyCast {
     if (!data) return void 0;
     return {
       id: data.secUid,
+      displayId: data.displayId,
       name: data.nickname,
       gender: data.gender,
       avatar: data.avatarThumb?.urlList?.[0]
@@ -904,6 +1350,69 @@ export class DyCast {
   private _getCastEmoji(data?: Text): string | undefined {
     if (!data) return void 0;
     return data.pieces?.[0]?.imageValue?.image?.urlList?.[0];
+  }
+
+  /**
+   * 格式化 displayText，将模板中的占位符替换为实际值
+   * 例如: "{0:user} 开通了守护" -> "用户名 开通了守护"
+   * @param displayText
+   * @returns
+   */
+  private _formatDisplayText(displayText?: Text): string | undefined {
+    if (!displayText) return void 0;
+    
+    const pattern = displayText.defaultPattern;
+    const pieces = displayText.pieces;
+    
+    if (!pattern) {
+      // 如果没有模板，尝试直接拼接 pieces
+      if (pieces && pieces.length > 0) {
+        return pieces.map(piece => {
+          if (piece.stringValue) return piece.stringValue;
+          if (piece.userValue?.user?.nickname) return piece.userValue.user.nickname;
+          return '';
+        }).join('');
+      }
+      return void 0;
+    }
+    
+    if (!pieces || pieces.length === 0) {
+      // 如果没有 pieces，直接返回模板
+      return pattern;
+    }
+    
+    // 替换模板中的占位符
+    let result = pattern;
+    pieces.forEach((piece, index) => {
+      let value = '';
+      
+      // 根据 piece 类型提取值
+      if (piece.stringValue) {
+        value = piece.stringValue;
+      } else if (piece.userValue?.user?.nickname) {
+        value = piece.userValue.user.nickname;
+      } else if (piece.giftValue) {
+        // 礼物相关
+        value = piece.giftValue.nameRef?.defaultPattern || '';
+      } else if (piece.imageValue) {
+        // 图片/表情
+        value = '[表情]';
+      }
+      
+      // 替换占位符，支持多种格式
+      // {0:user}, {1:string}, {0}, {1} 等
+      const patterns = [
+        new RegExp(`\\{${index}:user\\}`, 'g'),
+        new RegExp(`\\{${index}:string\\}`, 'g'),
+        new RegExp(`\\{${index}\\}`, 'g')
+      ];
+      
+      patterns.forEach(p => {
+        result = result.replace(p, value);
+      });
+    });
+    
+    return result;
   }
 
   /**
@@ -1027,6 +1536,10 @@ export class DyCast {
     if (this.pingTimer) {
       clearTimeout(this.pingTimer);
       this.pingTimer = void 0;
+    }
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = void 0;
     }
     this.cursor = {
       cursor: '',
@@ -1152,5 +1665,50 @@ export class DyCast {
       ...this.info,
       roomNum: this.roomNum
     };
+  }
+
+  /**
+   * 启用消息存档
+   * @param options 存档选项
+   */
+  public enableArchive(options?: {
+    maxMessages?: number;
+    autoExport?: boolean;
+    includeDecoded?: boolean;
+    exportInterval?: number;
+  }) {
+    if (!this.archiver) {
+      this.archiver = new MessageArchiver(
+        this.roomNum,
+        this.info.roomId || '',
+        {
+          enabled: true,
+          ...options
+        }
+      );
+    } else {
+      this.archiver.enable();
+    }
+    return this.archiver;
+  }
+
+  /**
+   * 禁用消息存档
+   */
+  public disableArchive() {
+    if (this.archiver) {
+      this.archiver.disable();
+    }
+  }
+
+  /**
+   * 导出存档
+   */
+  public exportArchive(filename?: string) {
+    if (this.archiver) {
+      this.archiver.exportToFile(filename);
+    } else {
+      console.warn('存档器未启用');
+    }
   }
 }

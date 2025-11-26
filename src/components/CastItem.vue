@@ -3,13 +3,20 @@
     :class="{
       'cast-item': true,
       'gift-cast': method === CastMethod.GIFT,
+      'high-value-gift-cast': isHighValueGift,
       'chat-cast': method === CastMethod.CHAT,
+      'screen-chat-cast': method === CastMethod.SCREEN_CHAT,
+      'privilege-screen-chat-cast': method === CastMethod.PRIVILEGE_SCREEN_CHAT,
       'like-cast': method === CastMethod.LIKE,
       'social-cast': method === CastMethod.SOCIAL,
       'member-cast': method === CastMethod.MEMBER,
       'emoji-cast': method === CastMethod.EMOJI_CHAT,
-      'custom-cast': method === CastMethod.CUSTOM
-    }">
+      'custom-cast': method === CastMethod.CUSTOM,
+      'room-message-cast': method === CastMethod.ROOM_MESSAGE,
+      'copyable': isCopyable
+    }"
+    @click="handleCopy"
+    :title="isCopyable ? '点击复制' : ''">
     <span class="prefix">$</span>
     <p class="content">
       <label class="nickname">[{{ user?.name ? user.name : 'unknown' }}]：</label>
@@ -40,9 +47,49 @@ interface CastItemProps {
   gift?: CastGift;
   content?: string;
   rtfContent?: CastRtfContent[];
+  giftThreshold?: number;
 }
 
-const props = withDefaults(defineProps<CastItemProps>(), {});
+const props = withDefaults(defineProps<CastItemProps>(), {
+  giftThreshold: 1000
+});
+
+// 判断是否为高价值礼物
+const isHighValueGift = computed(() => {
+  return props.method === CastMethod.GIFT && props.gift && props.gift.price > props.giftThreshold;
+});
+
+// 判断是否可复制
+const isCopyable = computed(() => {
+  return isHighValueGift.value || props.method === CastMethod.ROOM_MESSAGE;
+});
+
+// 获取纯文本内容
+const getTextContent = (): string => {
+  const userName = props.user?.name || 'unknown';
+  let content = '';
+  
+  if (isHighValueGift.value && props.gift) {
+    content = `【${props.gift.price}-礼物消息】谢谢${userName}送出的${props.gift.name}`;
+  } else if (props.method === CastMethod.ROOM_MESSAGE) {
+    content = props.content || '';
+  }
+  
+  return `[${userName}]：${content}`;
+};
+
+// 复制到剪贴板
+const handleCopy = async () => {
+  if (!isCopyable.value) return;
+  
+  try {
+    const text = getTextContent();
+    await navigator.clipboard.writeText(text);
+    console.log('已复制到剪贴板:', text);
+  } catch (err) {
+    console.error('复制失败:', err);
+  }
+};
 
 /**
  * 创建普通内容
@@ -104,11 +151,22 @@ const doms = computed(() => {
   let list: CastContentDOM[] = [];
   switch (props.method) {
     case CastMethod.CHAT:
+    case CastMethod.SCREEN_CHAT:
+    case CastMethod.PRIVILEGE_SCREEN_CHAT:
       if (props.rtfContent) list = createRtfContent(props.rtfContent);
       else list = createTextContent(props.content);
       break;
     case CastMethod.GIFT:
       if (props.gift) {
+        if (props.gift.price > props.giftThreshold){
+        list = [
+        {
+        node: 'text',
+            text: `【${props.gift.price}-礼物消息】   谢谢${props.user?.name}送出的${props.gift.name}`
+      }
+      ]
+        }
+        else{
         list = [
           {
             node: 'text',
@@ -122,9 +180,13 @@ const doms = computed(() => {
           {
             node: 'text',
             text: `× ${props.gift.count}`
+          },
+          {
+            node: 'text',
+            text: ` - 【${props.gift.price}】`
           }
         ];
-      } else {
+      }} else {
         list = [
           {
             node: 'text',
@@ -222,6 +284,85 @@ $giftText: #eba825;
       color: $giftText;
     }
   }
+  &.copyable {
+    cursor: pointer;
+    transition: transform 0.1s ease;
+    &:hover {
+      transform: translateX(2px);
+    }
+    &:active {
+      transform: scale(0.98);
+    }
+  }
+  &.high-value-gift-cast {
+    background: linear-gradient(135deg, rgba(255, 87, 51, 0.15) 0%, rgba(255, 140, 0, 0.15) 100%);
+    border-left: 3px solid #ff5733;
+    padding: 4px 8px;
+    border-radius: 4px;
+    margin: 2px 0;
+    .text {
+      font-weight: 600;
+      color: #ff4500;
+    }
+    .nickname {
+      color: #ff5733;
+      font-weight: 700;
+    }
+    .prefix {
+      color: #ff5733;
+    }
+  }
+  &.room-message-cast {
+    background: linear-gradient(135deg, rgba(42, 203, 66, 0.15) 0%, rgba(27, 172, 44, 0.15) 100%);
+    border-left: 3px solid #2acb42;
+    padding: 4px 8px;
+    border-radius: 4px;
+    margin: 2px 0;
+    .text {
+      font-weight: 500;
+      color: #1bac2c;
+    }
+    .nickname {
+      color: #2acb42;
+      font-weight: 600;
+    }
+    .prefix {
+      color: #2acb42;
+    }
+  }
+  &.screen-chat-cast {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%);
+    border-left: 3px solid #667eea;
+    padding: 4px 8px;
+    border-radius: 4px;
+    margin: 2px 0;
+    .text {
+      font-weight: 500;
+      color: #667eea;
+    }
+    .nickname {
+      color: #764ba2;
+      font-weight: 600;
+    }
+  }
+  &.privilege-screen-chat-cast {
+    background: linear-gradient(135deg, rgba(255, 193, 47, 0.15) 0%, rgba(235, 168, 37, 0.15) 100%);
+    border-left: 3px solid #ffc12f;
+    padding: 4px 8px;
+    border-radius: 4px;
+    margin: 2px 0;
+    .text {
+      font-weight: 600;
+      color: #d4a017;
+    }
+    .nickname {
+      color: #b8860b;
+      font-weight: 700;
+    }
+    .prefix {
+      color: #ffc12f;
+    }
+  }
   &.emoji-cast {
     .prefix {
       line-height: 2.4rem;
@@ -247,6 +388,55 @@ $giftText: #eba825;
     }
     .touser {
       color: $toUserDarkColor;
+    }
+    &.high-value-gift-cast {
+      background: linear-gradient(135deg, rgba(255, 87, 51, 0.25) 0%, rgba(255, 140, 0, 0.25) 100%);
+      border-left-color: #ff6347;
+      .text {
+        color: #ff6347;
+      }
+      .nickname {
+        color: #ff7f50;
+      }
+      .prefix {
+        color: #ff6347;
+      }
+    }
+    &.room-message-cast {
+      background: linear-gradient(135deg, rgba(42, 203, 66, 0.25) 0%, rgba(27, 172, 44, 0.25) 100%);
+      border-left-color: #3dd95a;
+      .text {
+        color: #5ce67e;
+      }
+      .nickname {
+        color: #6ef58a;
+      }
+      .prefix {
+        color: #3dd95a;
+      }
+    }
+    &.screen-chat-cast {
+      background: linear-gradient(135deg, rgba(102, 126, 234, 0.25) 0%, rgba(118, 75, 162, 0.25) 100%);
+      border-left-color: #8b9ff5;
+      .text {
+        color: #a5b4f7;
+      }
+      .nickname {
+        color: #b89dd4;
+      }
+    }
+    &.privilege-screen-chat-cast {
+      background: linear-gradient(135deg, rgba(255, 193, 47, 0.25) 0%, rgba(235, 168, 37, 0.25) 100%);
+      border-left-color: #ffd966;
+      .text {
+        color: #f4d03f;
+      }
+      .nickname {
+        color: #f9e79f;
+      }
+      .prefix {
+        color: #ffd966;
+      }
     }
   }
 }

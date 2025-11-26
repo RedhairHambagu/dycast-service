@@ -5,6 +5,7 @@
     <LikeIcon v-if="type === 'like'" />
     <MemberIcon v-if="type === 'member'" />
     <SocialIcon v-if="type === 'social'" />
+    <RoomIcon v-if="type === 'room'" />
   </div>
 </template>
 
@@ -15,6 +16,7 @@ import MemberIcon from './Icons/MemberIcon.vue';
 import LikeIcon from './Icons/LikeIcon.vue';
 import GiftIcon from './Icons/GiftIcon.vue';
 import SocialIcon from './Icons/SocialIcon.vue';
+import RoomIcon from './Icons/RoomIcon.vue';
 import type { CastType } from './type';
 
 interface CastTypeBtnProps {
@@ -34,7 +36,9 @@ const typeTips: Record<CastType, string> = {
   gift: '礼物',
   like: '点赞',
   member: '进入',
-  social: '关注'
+  social: '关注',
+  room: '房间消息',
+  all: '全部'
 };
 
 const active = ref(props.defaultValue);
