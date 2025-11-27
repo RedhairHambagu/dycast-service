@@ -70,12 +70,16 @@ const getTextContent = (): string => {
   let content = '';
   
   if (isHighValueGift.value && props.gift) {
-    content = `【${props.gift.price}-礼物消息】谢谢${userName}送出的${props.gift.name}`;
+    content = `谢谢${userName}送出的${props.gift.name}`;
   } else if (props.method === CastMethod.ROOM_MESSAGE) {
-    content = props.content || '';
+    const rawContent = props.content || '';
+    content = rawContent.replace(/^恭喜/, '谢谢');
+    if (!rawContent.startsWith('恭喜')) {
+      content = `谢谢${rawContent}`;
+    }
   }
   
-  return `[${userName}]：${content}`;
+  return content;
 };
 
 // 复制到剪贴板
