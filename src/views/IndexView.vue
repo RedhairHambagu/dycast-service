@@ -262,7 +262,7 @@ const handleMessages = function (msgs: DyMessage[]) {
             addConsoleMessage(`直播状态变更: ${statusText}`);
             
             // 只有在非直播状态时才断开连接
-            if (msg.room.status !== RoomStatus.LIVING && msg.room.status !== RoomStatus.PAUSE) {
+            if (msg.room.status !== RoomStatus.LIVING && msg.room.status !== RoomStatus.PREPARE) {
               newCasts.push(msg);
               otherCasts.push(msg);
               // 延迟断开，让状态消息先显示
