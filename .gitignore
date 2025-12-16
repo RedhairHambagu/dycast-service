@@ -19,6 +19,11 @@ coverage
 .env.local
 .env.production
 
+# 锁定文件（避免版本不一致）
+pnpm-lock.yaml
+yarn.lock
+package-lock.json
+
 /cypress/videos/
 /cypress/screenshots/
 
