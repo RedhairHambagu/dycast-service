@@ -15,9 +15,6 @@ RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.tencent.com/g' /etc/apk/repositorie
 COPY package*.json ./
 COPY pnpm-lock.yaml ./
 
-# 复制环境变量文件（Vite 构建时会自动读取）
-COPY .env ./.env
-
 # 安装依赖
 RUN pnpm install --frozen-lockfile
 
