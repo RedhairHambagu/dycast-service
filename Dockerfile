@@ -15,8 +15,8 @@ RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.tencent.com/g' /etc/apk/repositorie
 COPY package*.json ./
 COPY pnpm-lock.yaml ./
 
-# 安装依赖
-RUN pnpm install --frozen-lockfile
+# 安装依赖（允许更新锁定文件以匹配 package.json）
+RUN pnpm install --no-frozen-lockfile
 
 # 复制源代码
 COPY . .
