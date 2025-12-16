@@ -15,6 +15,12 @@
           <div class="view-left-tool" title="保存弹幕" @click.stop="saveCastToFile">
             <i class="ice-save"></i>
           </div>
+          <div class="view-left-tool" title="加载弹幕" @click.stop="loadCastFromFile">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+              <polyline points="15 9 12 12 9 9"/>
+            </svg>
+          </div>
           <div class="view-left-tool" title="分析存档" @click.stop="showAnalyzer = true">
             <i class="ice-chart"></i>
           </div>
@@ -194,6 +200,26 @@ const setRoomCount = function (room?: LiveRoom) {
   if (room.likeCount) likeCount.value = `${room.likeCount}`;
   if (room.totalUserCount) userCount.value = `${room.totalUserCount}`;
 };
+
+/**
+ * 从弹幕数组中提取最后的直播间状态数据
+ * @param messages 所有弹幕消息数组（已按时间从旧到新排序）
+ * @returns 最后的直播间状态
+ */
+function extractLastRoomStatus(messages: DyMessage[]): LiveRoom {
+  const result: LiveRoom = {};
+
+  // 从前往后遍历，让后面的消息覆盖前面的（弹幕文件本身已按时间排序）
+  for (const msg of messages) {
+    if (!msg.room) continue;
+
+    // 合并数据（后面的消息覆盖前面的）
+    Object.assign(result, msg.room);
+  }
+
+  return result;
+}
+
 /**
  * 设置直播间信息
  * @param info
@@ -553,6 +579,63 @@ const saveCastToFile = function () {
       SkMessage.error('弹幕保存出错了');
       CLog.error('弹幕保存出错了 =>', err);
     });
+};
+
+/** 加载弹幕文件 */
+const loadCastFromFile = async function () {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json';
+
+  input.onchange = async (e) => {
+    const file = (e.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const data: DyMessage[] = JSON.parse(text);
+
+      // 清空现有数据
+      allCasts.length = 0;
+      castSet.clear();
+
+      // 添加新数据
+      for (const msg of data) {
+        if (msg.id && !castSet.has(msg.id)) {
+          castSet.add(msg.id);
+          allCasts.push(msg);
+        }
+      }
+
+      // 【关键修改点】提取并设置最后的直播间状态
+      const lastRoomStatus = extractLastRoomStatus(allCasts);
+      if (lastRoomStatus && Object.keys(lastRoomStatus).length > 0) {
+        setRoomCount(lastRoomStatus);
+        SkMessage.info(`已恢复直播间状态：观众${lastRoomStatus.audienceCount || 'N/A'}人，点赞${lastRoomStatus.likeCount || 'N/A'}`);
+      }
+
+      // 重新分类显示
+      if (castRef.value) {
+        castRef.value.clearCasts();
+        castRef.value.appendCasts(allCasts);
+      }
+      if (otherRef.value) {
+        otherRef.value.clearCasts();
+        otherRef.value.appendCasts(allCasts); // 【修复】otherRef也应该加载数据
+      }
+      if (allRef.value) {
+        allRef.value.clearCasts();
+        allRef.value.appendCasts(allCasts);
+      }
+
+      SkMessage.success(`加载成功，共 ${allCasts.length} 条弹幕`);
+    } catch (err) {
+      SkMessage.error('加载失败');
+      CLog.error('加载失败 =>', err);
+    }
+  };
+
+  input.click();
 };
 </script>
 

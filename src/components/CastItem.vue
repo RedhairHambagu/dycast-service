@@ -13,10 +13,21 @@
       'emoji-cast': method === CastMethod.EMOJI_CHAT,
       'custom-cast': method === CastMethod.CUSTOM,
       'room-message-cast': method === CastMethod.ROOM_MESSAGE,
-      'copyable': isCopyable
+      'copyable': isCopyable,
+      'touching': isTouching
     }"
-    @click="handleCopy"
-    :title="isCopyable ? '点击复制' : ''">
+    :title="isCopyable ? '点击复制，长按也可复制' : ''"
+    @touchstart="handleTouchStart"
+    @touchend="handleTouchEnd"
+    @mousedown="handleTouchStart"
+    @mouseup="handleTouchEnd"
+    @mouseleave="handleTouchEnd"
+    @click="handleClick"
+    @contextmenu.prevent
+  >
+    <!-- 水波纹效果 -->
+    <div v-if="isTouching && isCopyable" class="ripple-effect" :style="rippleStyle"></div>
+
     <span class="prefix">$</span>
     <p class="content">
       <label class="nickname">[{{ user?.name ? user.name : 'unknown' }}]：</label>
@@ -27,12 +38,21 @@
         <img v-if="item.node === 'emoji'" class="emoji" alt="会员表情" :src="item.url" />
       </template>
     </p>
+
+    <!-- 移动端复制提示 -->
+    <div v-if="isMobile && isCopyable" class="copy-hint">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <path d="M6 2H14V12H6V2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M4 4H6V14H4V4Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { CastMethod, CastRtfContentType, type CastGift, type CastRtfContent, type CastUser } from '@/core/dycast';
 import { emojis } from '@/core/emoji';
+import { copyTextWithFeedback } from '@/hooks/useToast';
 import { computed, ref } from 'vue';
 
 interface CastContentDOM {
@@ -53,6 +73,20 @@ interface CastItemProps {
 const props = withDefaults(defineProps<CastItemProps>(), {
   giftThreshold: 1000
 });
+
+// 触摸状态
+const isTouching = ref(false);
+const isMobile = ref(false);
+const touchStartTime = ref(0);
+const rippleStyle = ref({
+  left: '0px',
+  top: '0px'
+});
+
+// 检测移动端
+if (typeof window !== 'undefined') {
+  isMobile.value = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
 
 // 判断是否为高价值礼物
 const isHighValueGift = computed(() => {
@@ -82,17 +116,66 @@ const getTextContent = (): string => {
   return content;
 };
 
+// 触摸开始
+const handleTouchStart = (event: TouchEvent | MouseEvent) => {
+  if (!isCopyable.value) return;
+
+  isTouching.value = true;
+  touchStartTime.value = Date.now();
+
+  // 计算水波纹位置
+  const target = event.currentTarget as HTMLElement;
+  const rect = target.getBoundingClientRect();
+
+  let clientX: number;
+  let clientY: number;
+
+  if (event instanceof TouchEvent) {
+    clientX = event.touches[0].clientX;
+    clientY = event.touches[0].clientY;
+  } else {
+    clientX = (event as MouseEvent).clientX;
+    clientY = (event as MouseEvent).clientY;
+  }
+
+  const x = clientX - rect.left;
+  const y = clientY - rect.top;
+
+  rippleStyle.value = {
+    left: `${x}px`,
+    top: `${y}px`
+  };
+};
+
+// 触摸结束
+const handleTouchEnd = () => {
+  isTouching.value = false;
+};
+
+// 点击处理
+const handleClick = async () => {
+  if (!isCopyable.value) return;
+
+  const touchDuration = Date.now() - touchStartTime.value;
+
+  // 如果是长按（超过500ms），不触发点击
+  if (touchDuration > 500) {
+    return;
+  }
+
+  await handleCopy();
+};
+
 // 复制到剪贴板
 const handleCopy = async () => {
   if (!isCopyable.value) return;
-  
-  try {
-    const text = getTextContent();
-    await navigator.clipboard.writeText(text);
-    console.log('已复制到剪贴板:', text);
-  } catch (err) {
-    console.error('复制失败:', err);
-  }
+
+  const text = getTextContent();
+  await copyTextWithFeedback(
+    text,
+    '复制成功',
+    '复制失败，请重试'
+  );
 };
 
 /**
@@ -240,6 +323,12 @@ $giftText: #eba825;
   padding-bottom: 3px;
   font-family: 'dymht';
   font-size: 1rem;
+  position: relative;
+  overflow: hidden;
+  // 移动端优化
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+
   .prefix {
     font-family: 'mkwxy';
     color: $prefixColor;
@@ -282,6 +371,35 @@ $giftText: #eba825;
     margin: 0;
     flex-grow: 1;
     line-height: 1.5rem;
+  }
+
+  // 水波纹效果
+  .ripple-effect {
+    position: absolute;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.6);
+    transform: scale(0);
+    animation: ripple 0.6s ease-out;
+    pointer-events: none;
+    width: 100px;
+    height: 100px;
+    margin-left: -50px;
+    margin-top: -50px;
+  }
+
+  // 复制提示图标
+  .copy-hint {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    opacity: 0.6;
+    color: currentColor;
+  }
+
+  // 触摸反馈
+  &.touching {
+    background-color: rgba(255, 255, 255, 0.05);
   }
   &.gift-cast {
     .text {
@@ -379,6 +497,43 @@ $giftText: #eba825;
     }
   }
 }
+
+// 水波纹动画
+@keyframes ripple {
+  to {
+    transform: scale(2.5);
+    opacity: 0;
+  }
+}
+
+// 移动端响应式优化
+@media (max-width: 768px) {
+  .cast-item {
+    font-size: 0.95rem;
+    padding: 6px 8px;
+    min-height: 44px; // 最小触摸区域
+
+    .content {
+      line-height: 1.8rem;
+    }
+
+    .copy-hint {
+      opacity: 0.5;
+      right: 6px;
+    }
+
+    &.copyable {
+      cursor: default; // 移动端不显示手型光标
+    }
+  }
+}
+
+// 硬件加速
+.cast-item {
+  will-change: transform;
+  transform: translateZ(0);
+}
+
 .theme-dark {
   .cast-item {
     .prefix {

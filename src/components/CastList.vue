@@ -206,7 +206,7 @@ let isAtBottom = true;
 const handleScroll = throttle(function (event) {
   const { scrollTop, clientHeight, scrollHeight } = event.target;
   isAtBottom = scrollTop + clientHeight >= scrollHeight - SCROLL_BTH;
-}, 200);
+}, 16); // 移动端优化：16ms = 60fps
 
 const scrollToBottom = function () {
   listRef.value?.scrollToBottom?.();
@@ -408,6 +408,40 @@ $darkText: #a5a5a5;
       border-radius: 2.5px; // 滑块圆角
     }
   }
+}
+
+// 移动端性能优化
+@media (max-width: 768px) {
+  .cast-list-main {
+    .scroller {
+      -webkit-overflow-scrolling: touch; // iOS 惯性滚动
+      overflow-scrolling: touch;
+
+      // 移动端滚动条隐藏（保留功能）
+      &::-webkit-scrollbar {
+        width: 0;
+        height: 0;
+      }
+    }
+  }
+}
+
+// 硬件加速优化
+.cast-list,
+.cast-list-main,
+.scroller {
+  will-change: transform;
+  transform: translateZ(0);
+}
+
+// 滚动性能优化
+.cast-list-main {
+  contain: layout style paint; // 限制重绘范围
+}
+
+// 虚拟滚动优化
+.scroller {
+  contain: strict; // 严格contain
 }
 
 @-moz-document url-prefix() {
