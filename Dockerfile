@@ -11,17 +11,12 @@ RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.tencent.com/g' /etc/apk/repositorie
     npm install -g pnpm && \
     pnpm config set registry https://mirrors.cloud.tencent.com/npm/
 
-# 设置构建时的环境变量（来自 docker-compose 或 .env）
-ARG VITE_ADMIN_SALT
-ARG VITE_ADMIN_HASH
-ARG VITE_LOGIN_URL
-ENV VITE_ADMIN_SALT=${VITE_ADMIN_SALT}
-ENV VITE_ADMIN_HASH=${VITE_ADMIN_HASH}
-ENV VITE_LOGIN_URL=${VITE_LOGIN_URL}
-
-# 复制 package 文件
+# 复制 package 文件和依赖文件
 COPY package*.json ./
 COPY pnpm-lock.yaml ./
+
+# 复制环境变量文件（Vite 构建时会自动读取）
+COPY .env ./.env
 
 # 安装依赖
 RUN pnpm install --frozen-lockfile

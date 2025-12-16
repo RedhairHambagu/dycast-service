@@ -9,19 +9,25 @@ class AuthService {
    * 获取环境变量配置
    */
   private getConfig(): AuthConfig {
-    return {
-      hash: import.meta.env.VITE_ADMIN_HASH || '',
-      salt: import.meta.env.VITE_ADMIN_SALT || '',
-      loginUrl: import.meta.env.VITE_LOGIN_URL || '/login'
-    };
-  }
+    const hash = import.meta.env.VITE_ADMIN_HASH;
+    const salt = import.meta.env.VITE_ADMIN_SALT;
+    const loginUrl = import.meta.env.VITE_LOGIN_URL || '/login';
 
-  /**
-   * 将字符串转换为 ArrayBuffer
-   */
-  private async stringToArrayBuffer(str: string): Promise<ArrayBuffer> {
-    const encoder = new TextEncoder();
-    return encoder.encode(str);
+    // 生产环境下必须提供 hash 和 salt
+    if (!hash || !salt) {
+      const errorMsg = `认证配置缺失：请设置环境变量 VITE_ADMIN_HASH 和 VITE_ADMIN_SALT
+当前值: hash=${hash ? '***' : '未设置'}, salt=${salt ? '***' : '未设置'}`;
+      console.error(errorMsg);
+
+      // 开发环境抛出错误，生产环境也抛出错误以阻止构建
+      throw new Error(errorMsg);
+    }
+
+    return {
+      hash,
+      salt,
+      loginUrl
+    };
   }
 
   /**
@@ -37,10 +43,7 @@ class AuthService {
    * 使用 PBKDF2 哈希密码
    */
   private async hashPassword(password: string, salt: string): Promise<string> {
-    const config = this.getConfig();
-    const actualSalt = salt || config.salt;
-
-    if (!actualSalt) {
+    if (!salt) {
       throw new Error('Salt is required for password hashing');
     }
 
@@ -57,7 +60,7 @@ class AuthService {
     const hashBuffer = await crypto.subtle.deriveBits(
       {
         name: 'PBKDF2',
-        salt: encoder.encode(actualSalt),
+        salt: encoder.encode(salt),
         iterations: 1000,
         hash: 'SHA-256'
       },
@@ -73,12 +76,6 @@ class AuthService {
    */
   private async verifyPassword(password: string): Promise<boolean> {
     const config = this.getConfig();
-
-    if (!config.hash || !config.salt) {
-      console.error('认证配置缺失：请检查环境变量 VITE_ADMIN_HASH 和 VITE_ADMIN_SALT');
-      return false;
-    }
-
     const hashedPassword = await this.hashPassword(password, config.salt);
     return hashedPassword === config.hash;
   }

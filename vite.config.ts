@@ -2,20 +2,49 @@ import { fileURLToPath, URL } from 'node:url';
 
 import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
+import obfuscator from 'vite-plugin-obfuscator';
 // import vueDevTools from 'vite-plugin-vue-devtools';
 
 // https://vite.dev/config/
-export default defineConfig({
-  plugins: [
-    vue()
-    // vueDevTools(),
-  ],
-  resolve: {
-    alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url))
-    }
-  },
-  server: {
+export default defineConfig(({ mode }) => {
+  return {
+    plugins: [
+      vue(),
+      // 代码混淆插件（只在生产环境启用）
+      ...(mode === 'production' ? [
+        obfuscator({
+          // 混淆选项
+          compact: true, // 压缩代码
+          controlFlowFlattening: true, // 控制流扁平化
+          deadCodeInjection: true, // 死代码注入
+          deadCodeInjectionThreshold: 0.4, // 死代码比例
+          debugProtection: true, // 调试保护
+          debugProtectionInterval: 4000, // 调试保护间隔
+          disableConsoleOutput: true, // 禁用 console 输出
+          identifierNamesGenerator: 'hexadecimal', // 标识符生成器
+          logLevel: 3, // 日志级别
+          numbersToExpressions: true, // 数字转表达式
+          renameGlobals: true, // 重命名全局变量
+          selfDefending: true, // 自我防护
+          simplify: true, // 简化代码
+          sourceMap: false, // 不生成 source map（生产环境）
+          splitStrings: true, // 分割字符串
+          splitStringsChunkLength: 10, // 字符串分割长度
+          stringArray: true, // 字符串数组
+          stringArrayEncoding: ['base64'], // 字符串数组编码
+          stringArrayThreshold: 0.75, // 字符串数组比例
+          transformObjectKeys: true, // 转换对象键
+          unicodeEscapeSequence: true // Unicode 转义序列
+        })
+      ] : []),
+      // vueDevTools(),
+    ],
+    resolve: {
+      alias: {
+        '@': fileURLToPath(new URL('./src', import.meta.url))
+      }
+    },
+    server: {
     host: '0.0.0.0', // 允许局域网访问
     proxy: {
       '/dylive': {
@@ -46,12 +75,12 @@ export default defineConfig({
             const setCookie = proxyRes.headers['set-cookie'];
             if (setCookie) {
               // 移除 Domain 或替换为当前域
-              const newCookie = setCookie.map(cookie =>
-                cookie
+              const newCookie = setCookie.map(cookie => {
+                return cookie
                   .replace(/; Domain=[^;]+/i, '')
                   .replace(/; SameSite=None/, '')
-                  .replace(/; Secure=true/i, '')
-              );
+                  .replace(/; Secure=true/i, '');
+              });
               proxyRes.headers['set-cookie'] = newCookie;
             }
           });
@@ -80,4 +109,5 @@ export default defineConfig({
       }
     }
   }
-});
+}})
+

@@ -69,9 +69,12 @@
 - **随机盐值**：每次生成 16 字节随机盐值
 - **客户端认证**：无需后端，基于 localStorage 的会话管理
 - **Token 过期**：24 小时自动过期机制
+- **代码混淆**：生产环境自动混淆 JavaScript 代码，防止逆向工程
 - **移动端优化**：响应式设计，完美适配手机/平板/桌面
 
 ### 环境变量配置
+
+⚠️ **重要**：环境变量在 Docker 构建时是必需的！如果未设置，构建将失败。
 
 | 变量名 | 描述 | 示例 | 是否必需 |
 |--------|------|------|----------|
@@ -98,15 +101,15 @@ node scripts/generate-hash.js "MyP@ssw0rd!2024"
 # ============================================================
 ```
 
-### Docker Compose 配置
+### Docker 构建说明
 
-```yaml
-services:
-  dycast:
-    environment:
-      - VITE_ADMIN_SALT=${VITE_ADMIN_SALT}
-      - VITE_ADMIN_HASH=${VITE_ADMIN_HASH}
-      - VITE_LOGIN_URL=${VITE_LOGIN_URL:-/login}
+⚠️ **重要**：Docker 构建时会自动读取项目根目录的 `.env` 文件。
+
+如果使用不同的环境变量文件：
+
+```bash
+# 使用自定义 .env 文件构建
+docker compose --env-file .env.production up -d --build
 ```
 
 ## 📱 移动端支持
@@ -134,7 +137,8 @@ dycast-service/
 │   └── generate-hash.js        # 密码哈希生成工具
 ├── .env.example                # 环境变量示例
 ├── docker-compose.yml          # Docker 配置
-└── nginx.conf                  # Nginx 配置（支持 SPA 路由）
+├── nginx.conf                  # Nginx 配置（支持 SPA 路由）
+└── vite.config.ts              # Vite 配置（含代码混淆）
 ```
 
 ## 🔧 高级配置
@@ -144,13 +148,14 @@ dycast-service/
 ```bash
 # 在 .env 文件中设置
 VITE_LOGIN_URL=/secure
-
-# 或在 docker-compose.yml 中
-environment:
-  - VITE_LOGIN_URL=/admin
 ```
 
-访问：http://localhost:18080/admin 即可进入登录页面
+然后重新构建：
+```bash
+docker compose up -d --build
+```
+
+访问：http://localhost:18080/secure 即可进入登录页面
 
 ### 多环境部署
 
@@ -160,33 +165,59 @@ cp .env.example .env
 # 编辑 .env 填入开发用密码
 npm run dev
 ```
+- ✅ 快速构建（不混淆）
+- ✅ 便于调试
+- ✅ 热重载
 
 **生产环境**：
 ```bash
 # 使用不同的 .env 文件
 cp .env.example .env.production
 # 编辑 .env.production 填入生产用密码
-docker compose --env-file .env.production up -d
+docker compose --env-file .env.production up -d --build
 ```
+- ✅ 代码混淆（防逆向）
+- ✅ 性能优化
+- ⚠️ 构建时间较长（1-3分钟）
+
+### 代码混淆配置
+
+生产环境自动启用以下混淆策略：
+
+- **字符串保护**：字符串数组化并 base64 编码
+- **标识符混淆**：变量名混淆为十六进制
+- **控制流扁平化**：改变代码执行流程
+- **死代码注入**：插入无效代码增加分析难度
+- **调试保护**：阻止开发者工具调试
+- **禁用 Console**：生产环境禁用 console 输出
+
+如需自定义混淆强度，修改 `vite.config.ts` 中的 `obfuscator()` 配置。
 
 ## 🐛 故障排除
 
-### 1. 密码验证失败
+### 1. 构建失败：认证配置缺失
+- ⚠️ 如果构建时出现 "认证配置缺失" 错误
+- ✅ 检查 `.env` 文件是否存在且包含正确的 `VITE_ADMIN_HASH` 和 `VITE_ADMIN_SALT`
+- ✅ 确保使用 `scripts/generate-hash.js` 生成这些值
+- ✅ 确认 `.env` 文件在项目根目录中
+
+### 2. 密码验证失败
 - ✅ 检查 `.env` 文件中的 `VITE_ADMIN_HASH` 和 `VITE_ADMIN_SALT` 是否正确
 - ✅ 确保使用 `scripts/generate-hash.js` 生成的值
 - ✅ 确认没有多余的空格或换行符
+- ✅ 重新构建镜像：`docker compose up -d --build`
 
-### 2. 页面刷新后重新登录
+### 3. 页面刷新后重新登录
 - ✅ 检查浏览器 localStorage 是否被清理
 - ✅ 确认 token 未过期（24 小时）
 - ✅ 尝试在隐私模式下测试
 
-### 3. 移动端显示异常
+### 4. 移动端显示异常
 - ✅ 检查 viewport 设置
 - ✅ 确认 CSS 媒体查询生效
 - ✅ 尝试清除浏览器缓存
 
-### 4. Docker 部署后无法访问
+### 5. Docker 部署后无法访问
 ```bash
 # 查看容器状态
 docker compose ps
@@ -198,6 +229,11 @@ docker compose logs dycast
 docker compose up -d --build
 ```
 
+### 6. 构建时间过长
+- ⚠️ 代码混淆会增加构建时间（通常 1-3 分钟）
+- ✅ 开发环境不会启用混淆（快速构建）
+- ✅ 生产环境自动启用混淆（保护代码）
+
 ## 📝 更新日志
 
 ### v1.0.0
@@ -206,3 +242,4 @@ docker compose up -d --build
 - ✨ 实现 PBKDF2 密码哈希 + 盐值验证
 - ✨ 支持可配置的登录 URL
 - ✨ 添加 token 自动过期机制
+- ✨ 添加代码混淆功能（生产环境）

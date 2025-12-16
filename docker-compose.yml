@@ -5,10 +5,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        - VITE_ADMIN_SALT=${VITE_ADMIN_SALT}
-        - VITE_ADMIN_HASH=${VITE_ADMIN_HASH}
-        - VITE_LOGIN_URL=${VITE_LOGIN_URL}
     container_name: dycast-app
     ports:
       - "18080:80"
