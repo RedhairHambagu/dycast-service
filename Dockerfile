@@ -5,7 +5,7 @@ FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/node:22-alpine AS builde
 # 构建参数
 ARG VITE_ADMIN_HASH
 ARG VITE_ADMIN_SALT
-ARG VITE_LOGIN_URL=/login
+ARG VITE_LOGIN_URL
 
 # 设置为环境变量供 vite build 使用
 ENV VITE_ADMIN_HASH=$VITE_ADMIN_HASH
