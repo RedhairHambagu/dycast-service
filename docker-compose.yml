@@ -5,16 +5,16 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        - VITE_ADMIN_SALT=${VITE_ADMIN_SALT}
+        - VITE_ADMIN_HASH=${VITE_ADMIN_HASH}
+        - VITE_LOGIN_URL=${VITE_LOGIN_URL:-/login}
     container_name: dycast-app
     ports:
       - "18080:80"
     restart: unless-stopped
     environment:
       - TZ=Asia/Shanghai
-      # 认证配置（请根据实际情况修改）
-      - VITE_ADMIN_SALT=your_salt_here
-      - VITE_ADMIN_HASH=your_hash_here
-      - VITE_LOGIN_URL=/login
     networks:
       - dycast-network
 

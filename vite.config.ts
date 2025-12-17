@@ -2,7 +2,7 @@ import { fileURLToPath, URL } from 'node:url';
 
 import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
-import obfuscator from 'vite-plugin-obfuscator';
+import obfuscator from 'rollup-plugin-obfuscator';
 // import vueDevTools from 'vite-plugin-vue-devtools';
 
 // https://vite.dev/config/
@@ -10,35 +10,32 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [
       vue(),
-      // 代码混淆插件（只在生产环境启用）
-      ...(mode === 'production' ? [
-        obfuscator({
-          // 混淆选项
-          compact: true, // 压缩代码
-          controlFlowFlattening: true, // 控制流扁平化
-          deadCodeInjection: true, // 死代码注入
-          deadCodeInjectionThreshold: 0.4, // 死代码比例
-          debugProtection: true, // 调试保护
-          debugProtectionInterval: 4000, // 调试保护间隔
-          disableConsoleOutput: true, // 禁用 console 输出
-          identifierNamesGenerator: 'hexadecimal', // 标识符生成器
-          logLevel: 3, // 日志级别
-          numbersToExpressions: true, // 数字转表达式
-          renameGlobals: true, // 重命名全局变量
-          selfDefending: true, // 自我防护
-          simplify: true, // 简化代码
-          sourceMap: false, // 不生成 source map（生产环境）
-          splitStrings: true, // 分割字符串
-          splitStringsChunkLength: 10, // 字符串分割长度
-          stringArray: true, // 字符串数组
-          stringArrayEncoding: ['base64'], // 字符串数组编码
-          stringArrayThreshold: 0.75, // 字符串数组比例
-          transformObjectKeys: true, // 转换对象键
-          unicodeEscapeSequence: true // Unicode 转义序列
-        })
-      ] : []),
       // vueDevTools(),
     ],
+    build: {
+      rollupOptions: {
+        plugins: mode === 'production' ? [
+          obfuscator({
+            options: {
+              compact: true,
+              controlFlowFlattening: true,
+              controlFlowFlatteningThreshold: 0.5,
+              deadCodeInjection: false,
+              disableConsoleOutput: true,
+              identifierNamesGenerator: 'hexadecimal',
+              numbersToExpressions: true,
+              simplify: true,
+              splitStrings: true,
+              splitStringsChunkLength: 10,
+              stringArray: true,
+              stringArrayEncoding: ['base64'],
+              stringArrayThreshold: 0.75,
+              unicodeEscapeSequence: false
+            }
+          })
+        ] : []
+      }
+    },
     resolve: {
       alias: {
         '@': fileURLToPath(new URL('./src', import.meta.url))

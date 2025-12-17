@@ -2,6 +2,16 @@
 # 阶段 1: 构建阶段
 FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/node:22-alpine AS builder
 
+# 构建参数
+ARG VITE_ADMIN_HASH
+ARG VITE_ADMIN_SALT
+ARG VITE_LOGIN_URL=/login
+
+# 设置为环境变量供 vite build 使用
+ENV VITE_ADMIN_HASH=$VITE_ADMIN_HASH
+ENV VITE_ADMIN_SALT=$VITE_ADMIN_SALT
+ENV VITE_LOGIN_URL=$VITE_LOGIN_URL
+
 # 设置工作目录
 WORKDIR /app
 
