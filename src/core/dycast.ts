@@ -8,6 +8,7 @@ import {
   decodeControlMessage,
   decodeCornerReachMessage,
   decodeEmojiChatMessage,
+  decodeExhibitionChatMessage,
   decodeFansclubMessage,
   decodeGiftMessage,
   decodeGiftSortMessage,
@@ -206,6 +207,7 @@ export enum CastMethod {
   QUIZ_AUDIENCE_STATUS = 'WebcastQuizAudienceStatusMessage',
   TEMP_STATE_AREA_REACH = 'WebcastTempStateAreaReachMessage',
   CORNER_REACH = 'WebcastCornerReachMessage',
+  EXHIBITION_CHAT = 'WebcastExhibitionChatMessage',
   /** 自定义消息 */
   CUSTOM = 'CustomMessage'
 }
@@ -1223,6 +1225,24 @@ export class DyCast {
           message = decodeCornerReachMessage(payload);
           data.method = CastMethod.CORNER_REACH;
           data.content = '角落到达';
+          processed = true;
+          break;
+        case CastMethod.EXHIBITION_CHAT:
+          message = decodeExhibitionChatMessage(payload);
+          data.method = CastMethod.EXHIBITION_CHAT;
+          data.user = this._getCastUser(message.user);
+          // 从 template 中提取内容 "{0:user} 成功冠名了{1:string}{2:image}"
+          if (message.exhibition?.template) {
+            const template = message.exhibition.template;
+            const userName = message.user?.nickname || '用户';
+            const giftName = message.exhibition.gift?.name || '';
+            data.content = template
+              .replace('{0:user}', userName)
+              .replace('{1:string}', giftName)
+              .replace('{2:image}', '');
+          } else {
+            data.content = '冠名消息';
+          }
           processed = true;
           break;
         case CastMethod.ROOM_INDICATOR:

@@ -1540,6 +1540,210 @@ function _decodeRoomUserSeqMessage_Contributor(bb: ByteBuffer): RoomUserSeqMessa
   return message;
 }
 
+// ExhibitionChatMessage - 冠名消息（简化版）
+export interface ExhibitionChatMessage {
+  msgType?: string;
+  template?: string;
+  user?: User;
+  gift?: GiftStruct;
+}
+
+export function encodeExhibitionChatMessage(message: ExhibitionChatMessage): Uint8Array {
+  let bb = popByteBuffer();
+  _encodeExhibitionChatMessage(message, bb);
+  return toUint8Array(bb);
+}
+
+function _encodeExhibitionChatMessage(message: ExhibitionChatMessage, bb: ByteBuffer): void {
+  // optional string msgType = 1;
+  let $msgType = message.msgType;
+  if ($msgType !== undefined) {
+    writeVarint32(bb, 10);
+    writeString(bb, $msgType);
+  }
+  // optional string template = 2;
+  let $template = message.template;
+  if ($template !== undefined) {
+    writeVarint32(bb, 18);
+    writeString(bb, $template);
+  }
+  // optional User user = 4;
+  let $user = message.user;
+  if ($user !== undefined) {
+    writeVarint32(bb, 34);
+    let nested = popByteBuffer();
+    _encodeUser($user, nested);
+    writeVarint32(bb, nested.limit);
+    writeByteBuffer(bb, nested);
+    pushByteBuffer(nested);
+  }
+  // optional GiftStruct gift = 21;
+  let $gift = message.gift;
+  if ($gift !== undefined) {
+    writeVarint32(bb, 170);
+    let nested = popByteBuffer();
+    _encodeGiftStruct($gift, nested);
+    writeVarint32(bb, nested.limit);
+    writeByteBuffer(bb, nested);
+    pushByteBuffer(nested);
+  }
+}
+
+export function decodeExhibitionChatMessage(binary: Uint8Array): ExhibitionChatMessage {
+  return _decodeExhibitionChatMessage(wrapByteBuffer(binary));
+}
+
+function _decodeExhibitionChatMessage(bb: ByteBuffer): ExhibitionChatMessage {
+  let message: ExhibitionChatMessage = {} as any;
+
+  end_of_message: while (!isAtEnd(bb)) {
+    let tag = readVarint32(bb);
+
+    switch (tag >>> 3) {
+      case 0:
+        break end_of_message;
+
+      // optional string msgType = 1;
+      case 1: {
+        message.msgType = readString(bb, readVarint32(bb));
+        break;
+      }
+
+      // optional string template = 2;
+      case 2: {
+        message.template = readString(bb, readVarint32(bb));
+        break;
+      }
+
+      // optional User user = 4;
+      case 4: {
+        let limit = pushTemporaryLength(bb);
+        message.user = _decodeUser(bb);
+        bb.limit = limit;
+        break;
+      }
+
+      // optional GiftStruct gift = 21;
+      case 21: {
+        let limit = pushTemporaryLength(bb);
+        message.gift = _decodeGiftStruct(bb);
+        bb.limit = limit;
+        break;
+      }
+
+      default:
+        skipUnknownField(bb, tag & 7);
+    }
+  }
+
+  return message;
+}
+
+// WebcastExhibitionChatMessage - 外层消息
+export interface WebcastExhibitionChatMessage {
+  common?: Common;
+  msgId?: string;
+  user?: User;
+  exhibition?: ExhibitionChatMessage;
+}
+
+export function encodeWebcastExhibitionChatMessage(message: WebcastExhibitionChatMessage): Uint8Array {
+  let bb = popByteBuffer();
+  _encodeWebcastExhibitionChatMessage(message, bb);
+  return toUint8Array(bb);
+}
+
+function _encodeWebcastExhibitionChatMessage(message: WebcastExhibitionChatMessage, bb: ByteBuffer): void {
+  // optional Common common = 1;
+  let $common = message.common;
+  if ($common !== undefined) {
+    writeVarint32(bb, 10);
+    let nested = popByteBuffer();
+    _encodeCommon($common, nested);
+    writeVarint32(bb, nested.limit);
+    writeByteBuffer(bb, nested);
+    pushByteBuffer(nested);
+  }
+  // optional string msgId = 2;
+  let $msgId = message.msgId;
+  if ($msgId !== undefined) {
+    writeVarint32(bb, 18);
+    writeString(bb, $msgId);
+  }
+  // optional User user = 4;
+  let $user = message.user;
+  if ($user !== undefined) {
+    writeVarint32(bb, 34);
+    let nested = popByteBuffer();
+    _encodeUser($user, nested);
+    writeVarint32(bb, nested.limit);
+    writeByteBuffer(bb, nested);
+    pushByteBuffer(nested);
+  }
+  // optional ExhibitionChatMessage exhibition = 8;
+  let $exhibition = message.exhibition;
+  if ($exhibition !== undefined) {
+    writeVarint32(bb, 66);
+    let nested = popByteBuffer();
+    _encodeExhibitionChatMessage($exhibition, nested);
+    writeVarint32(bb, nested.limit);
+    writeByteBuffer(bb, nested);
+    pushByteBuffer(nested);
+  }
+}
+
+export function decodeWebcastExhibitionChatMessage(binary: Uint8Array): WebcastExhibitionChatMessage {
+  return _decodeWebcastExhibitionChatMessage(wrapByteBuffer(binary));
+}
+
+function _decodeWebcastExhibitionChatMessage(bb: ByteBuffer): WebcastExhibitionChatMessage {
+  let message: WebcastExhibitionChatMessage = {} as any;
+
+  end_of_message: while (!isAtEnd(bb)) {
+    let tag = readVarint32(bb);
+
+    switch (tag >>> 3) {
+      case 0:
+        break end_of_message;
+
+      // optional Common common = 1;
+      case 1: {
+        let limit = pushTemporaryLength(bb);
+        message.common = _decodeCommon(bb);
+        bb.limit = limit;
+        break;
+      }
+
+      // optional string msgId = 2;
+      case 2: {
+        message.msgId = readString(bb, readVarint32(bb));
+        break;
+      }
+
+      // optional User user = 4;
+      case 4: {
+        let limit = pushTemporaryLength(bb);
+        message.user = _decodeUser(bb);
+        bb.limit = limit;
+        break;
+      }
+
+      // optional ExhibitionChatMessage exhibition = 8;
+      case 8: {
+        let limit = pushTemporaryLength(bb);
+        message.exhibition = _decodeExhibitionChatMessage(bb);
+        bb.limit = limit;
+        break;
+      }
+
+      default:
+        skipUnknownField(bb, tag & 7);
+    }
+  }
+
+  return message;
+}
+
 export interface GiftMessage {
   common?: Common;
   giftId?: string;
