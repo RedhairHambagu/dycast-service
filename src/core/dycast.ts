@@ -1228,11 +1228,11 @@ export class DyCast {
         case CastMethod.ROOM_INDICATOR:
           // WebcastRoomIndicatorMessage 解码器暂未实现
           // 记录到调试器但不处理
-          this.debugger.record(method || 'WebcastRoomIndicatorMessage', { 
-            method, 
+          this.debugger.record(method || 'WebcastRoomIndicatorMessage', {
+            method,
             msgId: msg.msgId,
-            note: 'Decoder not implemented yet' 
-          }, false);
+            note: 'Decoder not implemented yet'
+          }, false, payload);
           // 存档原始数据
           if (this.archiver) {
             this.archiver.archive(method || 'WebcastRoomIndicatorMessage', msg.msgId || '', payload, null);
@@ -1244,7 +1244,7 @@ export class DyCast {
             // 尝试解码以获取原始数据用于调试
             try {
               // 这里可以根据 method 动态解码，但为了简单，我们只记录类型
-              this.debugger.record(method, { method, msgId: msg.msgId }, false);
+              this.debugger.record(method, { method, msgId: msg.msgId }, false, payload);
             } catch (e) {
               // 解码失败也记录
               this.debugger.record(method || 'UNKNOWN', { error: 'decode failed' }, false);
@@ -1255,7 +1255,7 @@ export class DyCast {
       
       // 记录已处理的消息
       if (processed && method) {
-        this.debugger.record(method, message, true);
+        this.debugger.record(method, message, true, payload);
       }
       
       // 只存档未处理的消息

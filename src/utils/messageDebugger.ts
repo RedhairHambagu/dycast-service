@@ -3,11 +3,18 @@
  * 用于分析和统计直播间接收到的各类消息
  */
 
+export interface MessageSample {
+  timestamp: number;
+  data: any;
+  processed: boolean;
+  payload?: string; // Base64编码的原始 protobuf
+}
+
 export interface MessageStat {
   type: string;
   count: number;
   lastSeen: number;
-  samples: any[];
+  samples: MessageSample[];
 }
 
 export class MessageDebugger {
@@ -38,8 +45,12 @@ export class MessageDebugger {
 
   /**
    * 记录消息
+   * @param method 消息类型
+   * @param message 解码后的消息
+   * @param processed 是否处理成功
+   * @param payload 原始 protobuf (Uint8Array)
    */
-  record(method: string, message: any, processed: boolean = false) {
+  record(method: string, message: any, processed: boolean = false, payload?: Uint8Array) {
     if (!this.enabled) return;
 
     const stat = this.stats.get(method) || {
@@ -52,22 +63,40 @@ export class MessageDebugger {
     stat.count++;
     stat.lastSeen = Date.now();
 
+    // 将 payload 转为 Base64
+    let payloadBase64: string | undefined;
+    if (payload) {
+      payloadBase64 = this.uint8ArrayToBase64(payload);
+    }
+
     // 保存样本（只保存前几个）
     if (stat.samples.length < this.maxSamples) {
       stat.samples.push({
         timestamp: Date.now(),
         data: this.simplifyMessage(message),
-        processed
+        processed,
+        payload: payloadBase64
       });
     }
 
     this.stats.set(method, stat);
 
-    // 如果是未处理的消息，立即打印
+    // 如果是未处理的消息，警告
     if (!processed) {
       console.warn(`⚠️ 未处理的消息类型: ${method}`);
-      console.log('消息样本:', this.simplifyMessage(message));
     }
+  }
+
+  /**
+   * Uint8Array 转 Base64
+   */
+  private uint8ArrayToBase64(bytes: Uint8Array): string {
+    let binary = '';
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
   }
 
   /**

@@ -5,26 +5,32 @@
     <div v-if="!archive" class="upload-area" @drop.prevent="handleDrop" @dragover.prevent>
       <input type="file" @change="handleFileSelect" accept=".json" ref="fileInput" style="display: none">
       <div class="upload-content" @click="$refs.fileInput.click()">
-        <div class="icon">📦</div>
+        <div class="icon">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+        </div>
         <p>拖拽存档文件到这里</p>
         <p class="sub">或点击选择文件</p>
       </div>
     </div>
     
-    <div v-else class="analysis-result">
+    <div v-else-if="archive" class="analysis-result">
       <div class="header">
         <h3>分析结果</h3>
         <button @click="reset">重新选择</button>
       </div>
-      
+
       <div class="stats-grid">
         <div class="stat-card">
           <div class="label">房间号</div>
-          <div class="value">{{ archive.metadata.roomNum }}</div>
+          <div class="value">{{ archive?.metadata?.roomNum }}</div>
         </div>
         <div class="stat-card">
           <div class="label">消息总数</div>
-          <div class="value">{{ archive.messages.length }}</div>
+          <div class="value">{{ archive?.messages?.length }}</div>
         </div>
         <div class="stat-card">
           <div class="label">时长</div>

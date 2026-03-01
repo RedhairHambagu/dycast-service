@@ -22,7 +22,24 @@
             </svg>
           </div>
           <div class="view-left-tool" title="分析存档" @click.stop="showAnalyzer = true">
-            <i class="ice-chart"></i>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="20" x2="18" y2="10"/>
+              <line x1="12" y1="20" x2="12" y2="4"/>
+              <line x1="6" y1="20" x2="6" y2="14"/>
+            </svg>
+          </div>
+          <div
+            class="view-left-tool"
+            :class="{ 'tool-active': showDebugger }"
+            title="调试开关"
+            @click.stop="toggleDebugger"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 22h8"/>
+              <path d="M12 2a10 10 0 0 1 10 10v4a10 10 0 0 1-10 10h-4a10 10 0 0 1-10-10v-4a10 10 0 0 1 10-10z"/>
+              <path d="M12 2v8"/>
+              <circle cx="12" cy="14" r="2"/>
+            </svg>
           </div>
         </div>
         <hr class="hr" />
@@ -80,6 +97,31 @@
         <button class="close-btn" @click="showAnalyzer = false">关闭</button>
       </div>
     </div>
+
+    <!-- 调试面板 -->
+    <div v-if="debuggerPanelVisible" class="debugger-panel">
+      <div class="debugger-header">
+        <span>消息存档</span>
+        <button class="close-btn" @click="debuggerPanelVisible = false">×</button>
+      </div>
+      <div class="debugger-content">
+        <div class="debugger-stats">
+          <div class="stat-item">
+            <span class="stat-label">消息数:</span>
+            <span class="stat-value">{{ debuggerStats.totalTypes }}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">状态:</span>
+            <span class="stat-value">{{ showDebugger ? '记录中' : '已停止' }}</span>
+          </div>
+        </div>
+        <div class="debugger-actions">
+          <button class="action-btn" @click="refreshDebuggerStats">刷新</button>
+          <button class="action-btn" @click="exportDebugger">导出文件</button>
+          <button class="action-btn" @click="clearDebugger">清空</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -108,6 +150,12 @@ import SkMessage from '@/components/Message';
 import { formatDate } from '@/utils/commonUtil';
 
 const showAnalyzer = ref(false);
+
+// 调试开关
+const showDebugger = ref(false);
+// 调试面板可见性
+const debuggerPanelVisible = ref(false);
+
 import FileSaver from '@/utils/fileUtil';
 
 // 高价值礼物阈值
@@ -550,6 +598,78 @@ const stopRelayCast = function () {
   if (relayWs) relayWs.close(1000);
 };
 
+/** 调试相关功能 */
+const debuggerStats = ref({
+  totalTypes: 0,
+  unprocessedCount: 0,
+  unprocessed: [] as { type: string; count: number }[]
+});
+
+// 切换调试开关
+const toggleDebugger = function () {
+  showDebugger.value = !showDebugger.value;
+  if (castWs) {
+    if (showDebugger.value) {
+      // 启用存档
+      castWs.enableArchive({
+        maxMessages: 10000,
+        autoExport: false,
+        includeDecoded: false
+      });
+      debuggerPanelVisible.value = true;
+    } else {
+      // 禁用存档
+      castWs.disableArchive();
+    }
+  } else {
+    SkMessage.warning('请先连接直播间');
+    showDebugger.value = false;
+  }
+};
+
+// 刷新调试统计
+const refreshDebuggerStats = function () {
+  if (castWs && castWs.archiver) {
+    const stats = castWs.archiver.getStats();
+    debuggerStats.value = {
+      totalTypes: stats.messageCount,
+      unprocessedCount: 0,
+      unprocessed: []
+    };
+  }
+};
+
+// 显示调试样本
+const showDebugSample = function (item: { type: string; count: number }) {
+  // archive 不支持查看单个样本，直接导出全部
+  SkMessage.info('请使用导出功能查看完整数据');
+};
+
+// 导出调试数据
+const exportDebugger = function () {
+  if (castWs && castWs.archiver) {
+    castWs.archiver.exportToFile();
+    SkMessage.success('导出成功');
+  }
+};
+
+// 清空调试数据
+const clearDebugger = function () {
+  if (castWs && castWs.archiver) {
+    castWs.archiver.clear();
+    debuggerStats.value = { totalTypes: 0, unprocessedCount: 0, unprocessed: [] };
+    SkMessage.success('已清空');
+  }
+};
+
+// 监听调试开关变化，自动刷新统计
+import { watch } from 'vue';
+watch(showDebugger, (val) => {
+  if (val && castWs) {
+    refreshDebuggerStats();
+  }
+});
+
 /** 将弹幕保存到本地文件（手动保存） */
 const saveCastToFile = function () {
   const len = allCasts.length;
@@ -850,5 +970,129 @@ $tool: #8b968d;
 
 .close-btn:hover {
   background: #66b1ff;
+}
+
+/* 调试面板样式 */
+.tool-active {
+  color: #e6a23c;
+  background: rgba(230, 162, 60, 0.1);
+  border-radius: 4px;
+}
+
+.debugger-panel {
+  position: fixed;
+  top: 80px;
+  right: 20px;
+  width: 320px;
+  max-height: 60vh;
+  background: #1e1e1e;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  z-index: 9998;
+  overflow: hidden;
+}
+
+.debugger-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 15px;
+  background: #2d2d2d;
+  color: #fff;
+  font-size: 14px;
+}
+
+.debugger-header .close-btn {
+  position: static;
+  transform: none;
+  padding: 2px 8px;
+  margin: 0;
+  background: #444;
+  font-size: 16px;
+}
+
+.debugger-content {
+  padding: 15px;
+  color: #ccc;
+  font-size: 13px;
+  overflow-y: auto;
+  max-height: calc(60vh - 40px);
+}
+
+.debugger-stats {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.stat-item {
+  display: flex;
+  gap: 5px;
+}
+
+.stat-label {
+  color: #888;
+}
+
+.stat-value {
+  color: #4ade80;
+}
+
+.stat-error {
+  color: #f87171;
+}
+
+.unprocessed-list {
+  margin-bottom: 15px;
+}
+
+.unprocessed-title {
+  color: #f87171;
+  margin-bottom: 8px;
+}
+
+.unprocessed-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 5px 8px;
+  background: #2d2d2d;
+  border-radius: 4px;
+  margin-bottom: 4px;
+  cursor: pointer;
+}
+
+.unprocessed-item:hover {
+  background: #3d3d3d;
+}
+
+.type-name {
+  color: #f87171;
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.type-count {
+  color: #888;
+  font-size: 12px;
+}
+
+.debugger-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.action-btn {
+  flex: 1;
+  padding: 6px;
+  background: #3d3d3d;
+  color: #ccc;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.action-btn:hover {
+  background: #4d4d4d;
 }
 </style>
