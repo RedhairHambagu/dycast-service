@@ -92,7 +92,7 @@ if (typeof window !== 'undefined') {
 
 // 判断是否为高价值礼物
 const isHighValueGift = computed(() => {
-  return props.method === CastMethod.GIFT && props.gift && props.gift.price > props.giftThreshold;
+  return props.method === CastMethod.GIFT && props.gift && props.gift.price >= props.giftThreshold;
 });
 
 // 判断是否可复制
@@ -247,7 +247,7 @@ const doms = computed(() => {
       break;
     case CastMethod.GIFT:
       if (props.gift) {
-        if (props.gift.price > props.giftThreshold){
+        if (props.gift.price >= props.giftThreshold){
         list = [
         {
         node: 'text',

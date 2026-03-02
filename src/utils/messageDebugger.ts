@@ -91,12 +91,17 @@ export class MessageDebugger {
    * Uint8Array 转 Base64
    */
   private uint8ArrayToBase64(bytes: Uint8Array): string {
-    let binary = '';
-    const len = bytes.byteLength;
-    for (let i = 0; i < len; i++) {
-      binary += String.fromCharCode(bytes[i]);
+    try {
+      let binary = '';
+      const len = bytes.byteLength;
+      for (let i = 0; i < len; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      return btoa(binary);
+    } catch (e) {
+      // 转换失败时返回空字符串
+      return '';
     }
-    return btoa(binary);
   }
 
   /**

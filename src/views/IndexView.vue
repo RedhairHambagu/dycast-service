@@ -165,8 +165,8 @@ const giftThreshold = ref(1000);
 const connectStatus = ref<ConnectStatus>(0);
 // 转发状态
 const relayStatus = ref<ConnectStatus>(0);
-// 房间号
-const roomNum = ref<string>('');
+// 房间号（从环境变量读取默认值）
+const roomNum = ref<string>(import.meta.env.VITE_DEFAULT_ROOM || '');
 // 房间号输入框状态
 const roomInputRef = useTemplateRef('roomInput');
 // 转发地址
