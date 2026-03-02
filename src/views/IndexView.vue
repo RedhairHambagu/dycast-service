@@ -612,7 +612,7 @@ const toggleDebugger = function () {
     if (showDebugger.value) {
       // 启用存档
       castWs.enableArchive({
-        maxMessages: 1000,
+        maxMessages: 50,
         autoExport: false,
         includeDecoded: false
       });

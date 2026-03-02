@@ -87,8 +87,11 @@ export class MessageArchiver {
    */
   disable() {
     this.enabled = false;
+    // 清空已有消息
+    this.messages = [];
+    this.metadata.messageCount = 0;
     console.log('📦 消息存档已禁用');
-    
+
     if (this.exportTimer) {
       clearInterval(this.exportTimer);
       this.exportTimer = undefined;
@@ -123,7 +126,7 @@ export class MessageArchiver {
     // 检查是否需要自动导出
     if (this.messages.length >= this.maxMessages) {
       console.warn(`📦 消息数量达到上限 (${this.maxMessages})，自动导出...`);
-      this.export();
+      this.exportToFile();
     }
   }
 
