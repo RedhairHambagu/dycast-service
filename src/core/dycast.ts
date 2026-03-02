@@ -10,6 +10,7 @@ import {
   decodeEmojiChatMessage,
   decodeExhibitionChatMessage,
   decodeFansclubMessage,
+  decodeLuckyBoxMessage,
   decodeGiftMessage,
   decodeGiftSortMessage,
   decodeInRoomBannerMessage,
@@ -208,6 +209,7 @@ export enum CastMethod {
   TEMP_STATE_AREA_REACH = 'WebcastTempStateAreaReachMessage',
   CORNER_REACH = 'WebcastCornerReachMessage',
   EXHIBITION_CHAT = 'WebcastExhibitionChatMessage',
+  LUCKY_BOX = 'WebcastLuckyBoxMessage',
   /** 自定义消息 */
   CUSTOM = 'CustomMessage'
 }
@@ -1242,6 +1244,26 @@ export class DyCast {
               .replace('{2:image}', '');
           } else {
             data.content = '冠名消息';
+          }
+          processed = true;
+          break;
+        case CastMethod.LUCKY_BOX:
+          message = decodeLuckyBoxMessage(payload);
+          data.method = CastMethod.LUCKY_BOX;
+          data.user = this._getCastUser(message.user);
+          // 模板: "{0:user} 送出{1:string}{2:image}x1，价值{3:string}"
+          if (message.luckyBox?.template) {
+            const template = message.luckyBox.template;
+            const userName = message.user?.nickname || '用户';
+            const giftName = message.luckyBox.giftName || message.boxName || '福袋';
+            const price = message.luckyBox.price || '';
+            data.content = template
+              .replace('{0:user}', userName)
+              .replace('{1:string}', giftName)
+              .replace('{2:image}', '')
+              .replace('{3:string}', price);
+          } else {
+            data.content = `送出了${message.boxName || '福袋'}`;
           }
           processed = true;
           break;

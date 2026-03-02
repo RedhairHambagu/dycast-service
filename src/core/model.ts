@@ -1744,6 +1744,122 @@ function _decodeWebcastExhibitionChatMessage(bb: ByteBuffer): WebcastExhibitionC
   return message;
 }
 
+// LuckyBoxMessage - 福袋/红包消息
+export interface LuckyBoxMessage {
+  common?: Common;
+  msgId?: string;
+  user?: User;
+  boxType?: string;
+  boxName?: string;
+  luckyBox?: LuckyBoxDetail;
+}
+
+export interface LuckyBoxDetail {
+  template?: string;
+  giftName?: string;
+  price?: string;
+}
+
+export function decodeLuckyBoxMessage(binary: Uint8Array): LuckyBoxMessage {
+  return _decodeLuckyBoxMessage(wrapByteBuffer(binary));
+}
+
+function _decodeLuckyBoxMessage(bb: ByteBuffer): LuckyBoxMessage {
+  let message: LuckyBoxMessage = {} as any;
+
+  end_of_message: while (!isAtEnd(bb)) {
+    let tag = readVarint32(bb);
+
+    switch (tag >>> 3) {
+      case 0:
+        break end_of_message;
+
+      // optional Common common = 1;
+      case 1: {
+        let limit = pushTemporaryLength(bb);
+        message.common = _decodeCommon(bb);
+        bb.limit = limit;
+        break;
+      }
+
+      // optional string msgId = 2;
+      case 2: {
+        message.msgId = readString(bb, readVarint32(bb));
+        break;
+      }
+
+      // optional User user = 4;
+      case 4: {
+        let limit = pushTemporaryLength(bb);
+        message.user = _decodeUser(bb);
+        bb.limit = limit;
+        break;
+      }
+
+      // optional string boxName = 7;
+      case 7: {
+        message.boxName = readString(bb, readVarint32(bb));
+        break;
+      }
+
+      // optional LuckyBoxDetail luckyBox = 12;
+      case 12: {
+        let limit = pushTemporaryLength(bb);
+        message.luckyBox = _decodeLuckyBoxDetail(bb);
+        bb.limit = limit;
+        break;
+      }
+
+      // optional string boxType = 20;
+      case 20: {
+        message.boxType = readString(bb, readVarint32(bb));
+        break;
+      }
+
+      default:
+        skipUnknownField(bb, tag & 7);
+    }
+  }
+
+  return message;
+}
+
+function _decodeLuckyBoxDetail(bb: ByteBuffer): LuckyBoxDetail {
+  let detail: LuckyBoxDetail = {} as any;
+
+  end_of_message: while (!isAtEnd(bb)) {
+    let tag = readVarint32(bb);
+
+    switch (tag >>> 3) {
+      case 0:
+        break end_of_message;
+
+      // optional string template = 1;
+      case 1: {
+        detail.template = readString(bb, readVarint32(bb));
+        break;
+      }
+
+      // optional string giftName = 2;
+      case 2: {
+        detail.giftName = readString(bb, readVarint32(bb));
+        break;
+      }
+
+      // optional string price = 3;
+      case 3: {
+        detail.price = readString(bb, readVarint32(bb));
+        break;
+      }
+
+      default:
+        skipUnknownField(bb, tag & 7);
+    }
+  }
+
+  return detail;
+}
+
 export interface GiftMessage {
   common?: Common;
   giftId?: string;

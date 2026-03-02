@@ -14,6 +14,7 @@
       'custom-cast': method === CastMethod.CUSTOM,
       'room-message-cast': method === CastMethod.ROOM_MESSAGE,
       'exhibition-chat-cast': method === CastMethod.EXHIBITION_CHAT,
+      'lucky-box-cast': method === CastMethod.LUCKY_BOX,
       'copyable': isCopyable,
       'touching': isTouching
     }"
@@ -471,6 +472,24 @@ $giftText: #eba825;
       color: #2acb42;
     }
   }
+  &.lucky-box-cast {
+    background: linear-gradient(135deg, rgba(42, 203, 66, 0.15) 0%, rgba(27, 172, 44, 0.15) 100%);
+    border-left: 3px solid #2acb42;
+    padding: 4px 8px;
+    border-radius: 4px;
+    margin: 2px 0;
+    .text {
+      font-weight: 500;
+      color: #1bac2c;
+    }
+    .nickname {
+      color: #2acb42;
+      font-weight: 600;
+    }
+    .prefix {
+      color: #2acb42;
+    }
+  }
   &.screen-chat-cast {
     background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%);
     border-left: 3px solid #667eea;
@@ -594,6 +613,19 @@ $giftText: #eba825;
       }
     }
     &.exhibition-chat-cast {
+      background: linear-gradient(135deg, rgba(42, 203, 66, 0.25) 0%, rgba(27, 172, 44, 0.25) 100%);
+      border-left-color: #3dd95a;
+      .text {
+        color: #5ce67e;
+      }
+      .nickname {
+        color: #6ef58a;
+      }
+      .prefix {
+        color: #3dd95a;
+      }
+    }
+    &.lucky-box-cast {
       background: linear-gradient(135deg, rgba(42, 203, 66, 0.25) 0%, rgba(27, 172, 44, 0.25) 100%);
       border-left-color: #3dd95a;
       .text {
