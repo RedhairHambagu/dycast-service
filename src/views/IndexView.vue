@@ -102,7 +102,7 @@
     <div v-if="debuggerPanelVisible" class="debugger-panel">
       <div class="debugger-header">
         <span>消息存档</span>
-        <button class="close-btn" @click="debuggerPanelVisible = false">×</button>
+        <button class="close-btn" @click="closeDebugger">×</button>
       </div>
       <div class="debugger-content">
         <div class="debugger-stats">
@@ -452,9 +452,14 @@ const connectLive = function () {
     });
     cast.on('close', (code, reason) => {
       CLog.info(`DyCast 房间已关闭[${code}] => ${reason}`);
-      
+
       connectStatus.value = 3;
       setRoomInputStatus(false);
+
+      // 断开连接时关闭调试，避免后台继续存档
+      if (showDebugger.value) {
+        closeDebugger();
+      }
       
       // 断开连接后自动保存弹幕
       if (allCasts.length > 0) {
@@ -660,6 +665,17 @@ const clearDebugger = function () {
     debuggerStats.value = { totalTypes: 0, unprocessedCount: 0, unprocessed: [] };
     SkMessage.success('已清空');
   }
+};
+
+// 关闭调试（面板关闭时调用）
+const closeDebugger = function () {
+  debuggerPanelVisible.value = false;
+  // 关闭存档
+  if (castWs) {
+    castWs.disableArchive();
+  }
+  // 同步调试状态
+  showDebugger.value = false;
 };
 
 // 监听调试开关变化，自动刷新统计

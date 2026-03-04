@@ -40,11 +40,12 @@ export class MessageArchiver {
   private autoExport: boolean;
   private includeDecoded: boolean;
   private exportInterval: number;
-  
+
   private messages: ArchivedMessage[] = [];
   private metadata: ArchiveMetadata;
   private exportTimer?: number;
   private exportCount: number = 0;
+  private droppedCount: number = 0; // 被丢弃的消息数量
 
   constructor(
     roomNum: string,
@@ -104,11 +105,20 @@ export class MessageArchiver {
   archive(method: string, msgId: string, payload: Uint8Array, decoded?: any, displayId?: string) {
     if (!this.enabled) return;
 
+    // 尝试转换 Base64，失败则跳过该字段
+    let payloadBase64: string;
+    try {
+      payloadBase64 = this.uint8ArrayToBase64(payload);
+    } catch (e) {
+      console.warn('📦 消息存档 Base64 转换失败，跳过该条:', method);
+      payloadBase64 = '';
+    }
+
     const archived: ArchivedMessage = {
       timestamp: Date.now(),
       method,
       msgId,
-      payload: this.uint8ArrayToBase64(payload)
+      payload: payloadBase64
     };
 
     // 添加 displayId（如果有）
@@ -123,10 +133,17 @@ export class MessageArchiver {
     this.messages.push(archived);
     this.metadata.messageCount++;
 
-    // 检查是否需要自动导出
-    if (this.messages.length >= this.maxMessages) {
-      console.warn(`📦 消息数量达到上限 (${this.maxMessages})，自动导出...`);
-      this.exportToFile();
+    // 溢出处理
+    if (this.messages.length > this.maxMessages) {
+      if (this.autoExport) {
+        // autoExport=true 时才导出文件
+        console.warn(`📦 消息数量达到上限 (${this.maxMessages})，自动导出...`);
+        this.exportToFile();
+      } else {
+        // autoExport=false 时丢弃最旧消息
+        this.messages.shift();
+        this.droppedCount++;
+      }
     }
   }
 
@@ -134,12 +151,16 @@ export class MessageArchiver {
    * 将 Uint8Array 转换为 Base64
    */
   private uint8ArrayToBase64(bytes: Uint8Array): string {
-    let binary = '';
-    const len = bytes.byteLength;
-    for (let i = 0; i < len; i++) {
-      binary += String.fromCharCode(bytes[i]);
+    try {
+      let binary = '';
+      const len = bytes.byteLength;
+      for (let i = 0; i < len; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      return btoa(binary);
+    } catch (e) {
+      throw new Error('Base64 conversion failed');
     }
-    return btoa(binary);
   }
 
   /**
@@ -252,6 +273,7 @@ export class MessageArchiver {
       enabled: this.enabled,
       messageCount: this.messages.length,
       totalExported: this.exportCount,
+      droppedCount: this.droppedCount,
       startTime: this.metadata.startTime,
       duration: Date.now() - this.metadata.startTime,
       estimatedSize: this.estimateSize()

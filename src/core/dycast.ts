@@ -1719,18 +1719,19 @@ export class DyCast {
     includeDecoded?: boolean;
     exportInterval?: number;
   }) {
-    if (!this.archiver) {
-      this.archiver = new MessageArchiver(
-        this.roomNum,
-        this.info.roomId || '',
-        {
-          enabled: true,
-          ...options
-        }
-      );
-    } else {
-      this.archiver.enable();
+    // 每次启用时都创建新的 archiver，确保配置生效
+    // 先禁用旧的（如果有）
+    if (this.archiver) {
+      this.archiver.disable();
     }
+    this.archiver = new MessageArchiver(
+      this.roomNum,
+      this.info.roomId || '',
+      {
+        enabled: true,
+        ...options
+      }
+    );
     return this.archiver;
   }
 
