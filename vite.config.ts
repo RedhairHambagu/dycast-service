@@ -52,6 +52,16 @@ export default defineConfig(({ mode }) => {
         configure: proxy => {
           // 拦截请求
           proxy.on('proxyReq', (proxyReq, req) => {
+            // 处理手动 Cookie（通过 X-Manual-Cookie header 传递）
+            const manualCookie = req.headers['x-manual-cookie'];
+            if (manualCookie) {
+              // 清理 Cookie 中的非法字符（换行、回车等）
+              const cleanCookie = String(manualCookie).replace(/[\r\n]/g, '');
+              proxyReq.setHeader('Cookie', cleanCookie);
+              // 删除这个自定义 header，避免传递到目标服务器
+              proxyReq.removeHeader('x-manual-cookie');
+            }
+
             const ua = req.headers['user-agent'] || '';
             const isMobile = /mobile|android|iphone|ipad/i.test(ua);
             if (isMobile) {
@@ -60,7 +70,7 @@ export default defineConfig(({ mode }) => {
               // 可根据自己的平台设置
               proxyReq.setHeader(
                 'User-Agent',
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0'
+                'Mozilla/5.0 (Windows NT 10.0; Win64, x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0'
               );
             }
             // 强制修改 Referer(这里可能无效，但并不影响)
@@ -93,13 +103,29 @@ export default defineConfig(({ mode }) => {
           proxy.on('proxyReqWs', (proxyReq, req) => {
             const ua = req.headers['user-agent'] || '';
             const isMobile = /mobile|android|iphone|ipad/i.test(ua);
-            // 这里可以不设置也
             if (isMobile) {
-              // 设置请求头 User-Agent 标识
               proxyReq.setHeader(
                 'User-Agent',
                 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0'
               );
+            }
+
+            // 从 req.url 中提取 _dc 参数（手动 Cookie），注入到 Cookie header
+            if (req.url) {
+              try {
+                const urlStr = `http://localhost${req.url}`;
+                const urlObj = new URL(urlStr);
+                const dcValue = urlObj.searchParams.get('_dc');
+                if (dcValue) {
+                  let cookie = decodeURIComponent(dcValue);
+                  // 清理 Cookie 中可能导致 header 错误的非法字符
+                  cookie = cookie.replace(/[\r\n\t]/g, '');
+                  cookie = cookie.replace(/[^\x20-\x7E]/g, '');
+                  proxyReq.setHeader('Cookie', cookie);
+                }
+              } catch (e) {
+                // ignore parse errors
+              }
             }
           });
         }

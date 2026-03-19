@@ -51,6 +51,7 @@ import { getSignature } from './signature';
 import { logUserCast } from '@/utils/debugUtil';
 import { MessageDebugger } from '@/utils/messageDebugger';
 import { MessageArchiver } from '@/utils/messageArchiver';
+import { cookieService } from '@/services/cookieService';
 
 /**
  * 连接状态
@@ -1609,7 +1610,16 @@ export class DyCast {
    */
   private _getSocketUrl(opts: DyCastOptions) {
     const fullOpt = Object.assign({}, defaultOpts, opts);
-    return `${BASE_URL}?${this._mergeOptions(fullOpt)}`;
+    let url = `${BASE_URL}?${this._mergeOptions(fullOpt)}`;
+
+    // 优先使用手动导入的 Cookie（通过 URL 参数传递，代理会提取并注入到 Cookie header）
+    const manualCookie = cookieService.getCookie();
+    if (manualCookie?.rawCookie) {
+      // 使用 _dc 参数传递 Cookie，代理会识别并转换
+      url += `&_dc=${encodeURIComponent(manualCookie.rawCookie)}`;
+    }
+
+    return url;
   }
 
   /**

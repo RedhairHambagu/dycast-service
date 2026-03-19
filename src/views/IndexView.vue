@@ -79,6 +79,27 @@
             min="0"
             class="threshold-input" />
         </div>
+        <div class="cookie-panel">
+          <div class="cookie-header">
+            <span class="cookie-label">抖音 Cookie 设置</span>
+            <span class="cookie-status" :class="cookieStatusClass">{{ cookieStatusText }}</span>
+          </div>
+          <textarea
+            v-if="!isCookieSet"
+            v-model="cookieInput"
+            class="cookie-textarea"
+            placeholder="粘贴含 sessionid 等字段的 Cookie"
+            rows="2"
+          ></textarea>
+          <div v-else class="cookie-preview">
+            {{ cookiePreview }}
+          </div>
+          <div class="cookie-actions">
+            <button v-if="!isCookieSet" class="cookie-btn save" @click="saveCookie" :disabled="!cookieInput">保存生效</button>
+            <button v-if="isCookieSet" class="cookie-btn clear" @click="clearCookie">清空恢复自动</button>
+            <button v-if="!isCookieSet" class="cookie-btn test" @click="testCookie" :disabled="!cookieInput">测试格式</button>
+          </div>
+        </div>
       </div>
       <div class="view-other">
         <!-- 其它弹幕：关注、点赞、进入、控制台等 -->
@@ -142,7 +163,8 @@ import {
   type LiveRoom
 } from '@/core/dycast';
 import { verifyRoomNum, verifyWsUrl } from '@/utils/verifyUtil';
-import { ref, useTemplateRef } from 'vue';
+import { ref, useTemplateRef, onMounted, computed } from 'vue';
+import { cookieService } from '@/services/cookieService';
 import { CLog } from '@/utils/logUtil';
 import { getId } from '@/utils/idUtil';
 import { RelayCast } from '@/core/relay';
@@ -174,6 +196,70 @@ const relayUrl = ref<string>('');
 const relayInputRef = useTemplateRef('relayInput');
 // 状态面板
 const statusPanelRef = useTemplateRef('panel');
+
+// Cookie 状态管理
+const cookieInput = ref('');
+const isCookieSet = ref(false);
+const cookiePreview = ref('');
+const cookieFormatError = ref(false);
+
+const cookieStatusText = computed(() => {
+  if (cookieFormatError.value) return '格式错误';
+  if (isCookieSet.value) return '已生效 (手动)';
+  return '未设置 (自动)';
+});
+
+const cookieStatusClass = computed(() => {
+  if (cookieFormatError.value) return 'status-error';
+  if (isCookieSet.value) return 'status-success';
+  return 'status-normal';
+});
+
+const loadCookie = () => {
+  const state = cookieService.getCookie();
+  if (state) {
+    isCookieSet.value = true;
+    cookiePreview.value = state.maskedPreview;
+    cookieFormatError.value = false;
+  } else {
+    isCookieSet.value = false;
+    cookieInput.value = '';
+    cookieFormatError.value = false;
+  }
+};
+
+const saveCookie = () => {
+  if (!cookieInput.value) return;
+  const state = cookieService.setCookie(cookieInput.value);
+  if (state) {
+    loadCookie();
+    SkMessage.success('Cookie 已保存并准备生效');
+  } else {
+    cookieFormatError.value = true;
+    SkMessage.error('Cookie 格式校验失败，请检查并包含 "=" 等正确键值对');
+  }
+};
+
+const clearCookie = () => {
+  cookieService.clearCookie();
+  loadCookie();
+  SkMessage.info('已清空手动 Cookie，恢复自动模式');
+};
+
+const testCookie = () => {
+  if (!cookieInput.value) return;
+  if (cookieService.validate(cookieInput.value)) {
+    cookieFormatError.value = false;
+    SkMessage.success('格式校验通过，可以保存');
+  } else {
+    cookieFormatError.value = true;
+    SkMessage.error('Cookie 格式有误');
+  }
+};
+
+onMounted(() => {
+  loadCookie();
+});
 
 /** 直播间信息 */
 const cover = ref<string>('');
@@ -889,6 +975,70 @@ $tool: #8b968d;
       }
       &::placeholder {
         color: #ccc;
+      }
+    }
+  }
+  .cookie-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px 12px;
+    background: #fff;
+    border-radius: 4px;
+    border: 1px solid $bd;
+    .cookie-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      .cookie-label {
+        font-family: 'mkwxy';
+        font-size: 0.9rem;
+        color: #666;
+      }
+      .cookie-status {
+        font-size: 0.8rem;
+        &.status-normal { color: #888; }
+        &.status-success { color: $theme; font-weight: bold; }
+        &.status-error { color: #f56c6c; font-weight: bold; }
+      }
+    }
+    .cookie-textarea {
+      width: 100%;
+      border: 1px solid #ddd;
+      border-radius: 3px;
+      padding: 6px;
+      font-size: 0.85rem;
+      resize: vertical;
+      box-sizing: border-box;
+      outline: none;
+      &:focus { border-color: $theme; }
+      &::placeholder { color: #ccc; }
+    }
+    .cookie-preview {
+      font-size: 0.85rem;
+      color: #999;
+      background: #f5f5f5;
+      padding: 6px;
+      border-radius: 3px;
+      word-break: break-all;
+    }
+    .cookie-actions {
+      display: flex;
+      gap: 8px;
+      .cookie-btn {
+        flex: 1;
+        padding: 4px 0;
+        font-size: 0.85rem;
+        border: none;
+        border-radius: 3px;
+        cursor: pointer;
+        color: #fff;
+        &.save { background: $theme; }
+        &.save:disabled { background: #a8d5ba; cursor: not-allowed; }
+        &.test { background: #e6a23c; }
+        &.test:disabled { background: #f3d19e; cursor: not-allowed; }
+        &.clear { background: #f56c6c; }
+        &:hover:not(:disabled) { opacity: 0.9; }
       }
     }
   }

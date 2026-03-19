@@ -2,16 +2,36 @@ import type { DyImInfo } from './dycast';
 import { decodeResponse } from './model';
 import { getMsToken } from './signature';
 import { makeUrlParams, parseLiveHtml } from './util';
+import { cookieService } from '@/services/cookieService';
+import { CLog } from '@/utils/logUtil';
+
+/**
+ * 获取手动 Cookie（如果已设置）
+ */
+const getManualCookie = (): string | undefined => {
+  const state = cookieService.getCookie();
+  return state?.rawCookie;
+};
 
 /**
  * 请求直播间信息
  */
 export const fetchLiveInfo = async function (id: string) {
   try {
-    const html = await fetch(`/dylive/${id}`).then(res => res.text());
+    const manualCookie = getManualCookie();
+    // 通过自定义 header 传递手动 Cookie
+    const headers: HeadersInit = {};
+    if (manualCookie) {
+      headers['X-Manual-Cookie'] = manualCookie;
+    }
+    const response = await fetch(`/dylive/${id}`, { headers });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    const html = await response.text();
     return html;
   } catch (err) {
-    return Promise.reject(Error('Fetch Live Info Error'));
+    return Promise.reject(err);
   }
 };
 
@@ -107,11 +127,15 @@ export const fetchImInfo = async function (roomId: string, uniqueId: string) {
       a_bogus: aBogus
     });
     const url = `/dylive/webcast/im/fetch/?${makeUrlParams(params)}`;
-    // 不清楚接口是否有 referer 验证，需要的话，得在服务器跨域配置处设置，这里配置无效
-    // const headers = {
-    //   Referer: `https://live.douyin.com/${roomNum}`
-    // };
-    const buffer = await fetch(url).then(res => res.arrayBuffer());
+    const manualCookie = getManualCookie();
+
+    // 通过自定义 header 传递手动 Cookie，代理会转换到 Cookie header
+    const headers: HeadersInit = {};
+    if (manualCookie) {
+      headers['X-Manual-Cookie'] = manualCookie;
+    }
+
+    const buffer = await fetch(url, { headers }).then(res => res.arrayBuffer());
     return buffer;
   } catch (err) {
     return Promise.reject(Error('Fetch Im Info Error'));

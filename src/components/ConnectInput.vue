@@ -29,7 +29,7 @@
 
 <script setup lang="ts">
 import { debounce } from '@/utils/loashUtil';
-import { onMounted, ref, watch } from 'vue';
+import { onMounted, ref, watch, computed } from 'vue';
 
 interface TestRV {
   flag: boolean;
@@ -76,6 +76,19 @@ const handleClick = () => {
   // 锁定输入
   inputDisabled.value = true;
   btnDisabled.value = true;
+
+  // 点击时同步验证，不依赖 debounce
+  if (!connectStatus.value && props.test) {
+    const valid = props.test(inputValue.value || '');
+    if (!valid.flag) {
+      // 验证失败，解锁并提示
+      inputDisabled.value = false;
+      btnDisabled.value = false;
+      testTip.value = valid.message;
+      return;
+    }
+  }
+
   if (connectStatus.value) {
     // 取消
     emits('cancel', inputValue.value);
@@ -133,11 +146,27 @@ const setStatus = function (flag?: boolean) {
 
 /** 初始化数据 */
 const initData = function () {
-  if (props.test) btnDisabled.value = true;
+  if (props.test && inputValue.value) {
+    // 初始有值时直接验证
+    const valid = props.test(inputValue.value);
+    btnDisabled.value = !valid.flag;
+    testTip.value = valid.message;
+  } else if (props.test) {
+    btnDisabled.value = true;
+  }
 };
 
 onMounted(() => {
   initData();
+});
+
+// 监听输入值变化，自动验证（但连接状态下不验证）
+watch(inputValue, (newVal) => {
+  if (props.test && !connectStatus.value) {
+    const valid = props.test(newVal || '');
+    btnDisabled.value = !valid.flag;
+    testTip.value = valid.message;
+  }
 });
 
 defineExpose({
