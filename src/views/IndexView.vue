@@ -48,7 +48,7 @@
     </div>
     <div class="view-center">
       <!-- 主要弹幕：聊天、礼物、房间消息 -->
-      <CastList :types="['chat', 'gift', 'room']" :gift-threshold="giftThreshold" ref="castEl" />
+      <CastList :types="['chat', 'gift', 'room', 'exhibition']" :gift-threshold="giftThreshold" ref="castEl" />
     </div>
     <div class="view-right">
       <div class="view-input">
@@ -407,7 +407,7 @@ const handleMessages = function (msgs: DyMessage[]) {
           break;
         case CastMethod.EXHIBITION_CHAT:
           newCasts.push(msg);
-          otherCasts.push(msg);
+          mainCasts.push(msg);
           break;
         case CastMethod.EMOJI_CHAT:
           newCasts.push(msg);
