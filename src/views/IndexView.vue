@@ -103,7 +103,7 @@
       </div>
       <div class="view-other">
         <!-- 其它弹幕：关注、点赞、进入、控制台等 -->
-        <CastList ref="otherEl" :types="['social', 'like', 'member']" pos="left" no-prefix theme="dark" />
+        <CastList ref="otherEl" :types="['social', 'like', 'member', 'exhibition']" pos="left" no-prefix theme="dark" />
       </div>
       <div class="view-all">
         <!-- 所有消息：包括特效、房间消息等 -->
@@ -404,6 +404,10 @@ const handleMessages = function (msgs: DyMessage[]) {
           newCasts.push(msg);
           otherCasts.push(msg);
           setRoomCount(msg.room);
+          break;
+        case CastMethod.EXHIBITION_CHAT:
+          newCasts.push(msg);
+          otherCasts.push(msg);
           break;
         case CastMethod.EMOJI_CHAT:
           newCasts.push(msg);

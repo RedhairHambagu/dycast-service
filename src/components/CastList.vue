@@ -122,6 +122,9 @@ const setCastType = function (type: CastType, flag?: boolean) {
     case 'member':
       typeMap.set(CastMethod.MEMBER, !!flag);
       break;
+    case 'exhibition':
+      typeMap.set(CastMethod.EXHIBITION_CHAT, !!flag);
+      break;
     case 'room':
       typeMap.set(CastMethod.ROOM_MESSAGE, !!flag);
       break;

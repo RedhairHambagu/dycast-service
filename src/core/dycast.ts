@@ -511,7 +511,7 @@ export class DyCast {
     this.status = RoomStatus.END;
     this.emitter = new Emitter<DyCastEvent>();
     this.isReconnecting = false;
-    this.debugger = new MessageDebugger(false, 5);
+    this.debugger = new MessageDebugger(false, 20);
     this.archiver = null; // 默认不启用，需要手动创建
   }
 
@@ -1300,9 +1300,9 @@ export class DyCast {
       if (processed && method) {
         this.debugger.record(method, message, true, payload);
       }
-      
-      // 只存档未处理的消息
-      if (!processed && method && msg.msgId && this.archiver) {
+
+      // 存档占位符消息（如"横幅消息"）的原始 payload
+      if (processed && method && msg.msgId && this.archiver && data.content === '横幅消息') {
         this.archiver.archive(method, msg.msgId, payload, message);
       }
       
