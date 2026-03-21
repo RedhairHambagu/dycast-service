@@ -39,8 +39,12 @@ FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/nginx:alpine
 # 配置 Alpine 镜像加速
 RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.tencent.com/g' /etc/apk/repositories
 
-# 复制自定义 nginx 配置
+# 加载 njs 模块（用于 URL 解码 Cookie）
+RUN sed -i '1i load_module modules/ngx_http_js_module.so;' /etc/nginx/nginx.conf
+
+# 复制自定义 nginx 配置和 njs 脚本
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY cookie.js /etc/nginx/njs/cookie.js
 
 # 从构建阶段复制构建产物
 COPY --from=builder /app/dist /usr/share/nginx/html

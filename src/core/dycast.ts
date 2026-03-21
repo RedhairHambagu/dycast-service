@@ -1616,7 +1616,12 @@ export class DyCast {
     const manualCookie = cookieService.getCookie();
     if (manualCookie?.rawCookie) {
       // 使用 _dc 参数传递 Cookie，代理会识别并转换
-      url += `&_dc=${encodeURIComponent(manualCookie.rawCookie)}`;
+      // nginx $arg_* 不自动 URL 解码，只编码会破坏 URL 结构的字符（&、#、%）
+      // 去除 "; " 中的空格：避免浏览器将空格编码为 %20，nginx 拿到原始有效 cookie 字符串
+      const safeCookie = manualCookie.rawCookie
+        .replace(/;\s+/g, ';')
+        .trim();
+      url += `&_dc=${safeCookie.replace(/[%&#]/g, c => encodeURIComponent(c))}`;
     }
 
     return url;
