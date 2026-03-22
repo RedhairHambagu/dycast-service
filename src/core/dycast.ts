@@ -15,6 +15,7 @@ import {
   decodeGiftSortMessage,
   decodeInRoomBannerMessage,
   decodeInteractEffectMessage,
+  decodeRoomIndicatorMessage,
   decodeLikeMessage,
   decodeMemberMessage,
   decodeNotifyEffectMessage,
@@ -190,7 +191,6 @@ export enum CastMethod {
   EMOJI_CHAT = 'WebcastEmojiChatMessage',
   FANSCLUB = 'WebcastFansclubMessage',
   ROOM_MESSAGE = 'WebcastRoomMessage',
-  IN_ROOM_BANNER = 'WebcastInRoomBannerMessage',
   ROOM_DATA_SYNC = 'WebcastRoomDataSyncMessage',
   ACTIVITY_EMOJI_GROUPS = 'WebcastActivityEmojiGroupsMessage',
   GIFT_SORT = 'WebcastGiftSortMessage',
@@ -206,6 +206,10 @@ export enum CastMethod {
   NOTIFY = 'WebcastNotifyMessage',
   ROOM_NOTIFY = 'WebcastRoomNotifyMessage',
   ROOM_INDICATOR = 'WebcastRoomIndicatorMessage',
+  // 164: WebcastInRoomBannerMessage - 直播间横幅/活动消息
+  // content_type: 26v_3_ad(广告), 25v_11_ai_gift(AI礼物), cube_xxx(魔方/嘉年华),
+  //               24v_10_fanspk(粉丝PK), gift_flower(鲜花), exhibition_section(展览)
+  IN_ROOM_BANNER = 'WebcastInRoomBannerMessage',
   QUIZ_AUDIENCE_STATUS = 'WebcastQuizAudienceStatusMessage',
   TEMP_STATE_AREA_REACH = 'WebcastTempStateAreaReachMessage',
   CORNER_REACH = 'WebcastCornerReachMessage',
@@ -1105,9 +1109,11 @@ export class DyCast {
           processed = true;
           break;
         case CastMethod.IN_ROOM_BANNER:
+          // content_type: 26v_3_ad(广告), 25v_11_ai_gift(AI礼物), cube_xxx(魔方/嘉年华),
+          //               24v_10_fanspk(粉丝PK), gift_flower(鲜花), exhibition_section(展览)
           message = decodeInRoomBannerMessage(payload);
           data.method = CastMethod.IN_ROOM_BANNER;
-          data.content = '横幅消息';
+          data.content = message.contentType;
           processed = true;
           break;
         case CastMethod.ROOM_DATA_SYNC:
@@ -1269,17 +1275,15 @@ export class DyCast {
           processed = true;
           break;
         case CastMethod.ROOM_INDICATOR:
-          // WebcastRoomIndicatorMessage 解码器暂未实现
-          // 记录到调试器但不处理
-          this.debugger.record(method || 'WebcastRoomIndicatorMessage', {
-            method,
-            msgId: msg.msgId,
-            note: 'Decoder not implemented yet'
-          }, false, payload);
-          // 存档原始数据
-          if (this.archiver) {
-            this.archiver.archive(method || 'WebcastRoomIndicatorMessage', msg.msgId || '', payload, null);
-          }
+          // data.status.text(加热值), data.status.statusText(状态)
+          message = decodeRoomIndicatorMessage(payload);
+          data.method = CastMethod.ROOM_INDICATOR;
+          data.content = message.data?.status?.statusText || message.data?.status?.text || '';
+          processed = true;
+          break;
+        case CastMethod.IN_ROOM_BANNER:
+          // content_type: 26v_3_ad(广告), 25v_11_ai_gift(AI礼物), cube_xxx(魔方/嘉年华),
+          //               24v_10_fanspk(粉丝PK), gift_flower(鲜花), exhibition_section(展览)
           return null;
         default:
           // 未处理的消息类型

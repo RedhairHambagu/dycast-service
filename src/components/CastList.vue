@@ -127,6 +127,8 @@ const setCastType = function (type: CastType, flag?: boolean) {
       break;
     case 'room':
       typeMap.set(CastMethod.ROOM_MESSAGE, !!flag);
+      typeMap.set(CastMethod.EXHIBITION_CHAT, !!flag);
+      typeMap.set(CastMethod.LUCKY_BOX, !!flag);
       break;
     case 'all':
       // 'all' 类型显示所有消息类型

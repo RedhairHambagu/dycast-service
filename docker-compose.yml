@@ -9,6 +9,7 @@ services:
         - VITE_ADMIN_SALT=${VITE_ADMIN_SALT}
         - VITE_ADMIN_HASH=${VITE_ADMIN_HASH}
         - VITE_LOGIN_URL=${VITE_LOGIN_URL:-/login}
+        - VITE_DEFAULT_ROOM=${VITE_DEFAULT_ROOM:-22780151044}
     container_name: dycast-app
     ports:
       - "18080:80"

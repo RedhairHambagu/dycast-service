@@ -22034,6 +22034,311 @@ export function decodeQuiz(binary: Uint8Array): Quiz {
   return _decodeQuiz(wrapByteBuffer(binary));
 }
 
+// ============================================================
+// WebcastRoomIndicatorMessage - 加热卡/指示器消息
+// ============================================================
+
+// RoomIndicatorData - field 4，内含加热卡具体数据
+export interface RoomIndicatorData {
+  redirectUrl?: string;       // sslocal://... 跳转链接
+  action?: RoomIndicatorAction;
+  status?: RoomIndicatorStatus;
+  extraData?: string;        // JSON: {"task_description":"anchor_heat","support_from":"anchor_heat"}
+}
+
+// RoomIndicatorAction - field 2，图标信息
+export interface RoomIndicatorAction {
+  iconUrls?: string[];        // 加热图标 URL 列表
+  iconName?: string;
+  iconWidth?: number;
+  iconHeight?: number;
+  iconBgColor?: string;      // #EBCEE1
+}
+
+// RoomIndicatorStatus - field 3，状态信息
+export interface RoomIndicatorStatus {
+  type?: number;
+  level?: number;
+  text?: string;             // "+25"
+  expireTime?: number;       // 时间戳
+  statusText?: string;       // "已结束"
+}
+
+// WebcastRoomIndicatorMessage - 外层消息
+export interface RoomIndicatorMessage {
+  common?: Common;
+  msgId?: string;
+  userId?: string;
+  flag?: number;
+  data?: RoomIndicatorData;
+}
+
+export function decodeRoomIndicatorMessage(binary: Uint8Array): RoomIndicatorMessage {
+  return _decodeRoomIndicatorMessage(wrapByteBuffer(binary));
+}
+
+function _decodeRoomIndicatorMessage(bb: ByteBuffer): RoomIndicatorMessage {
+  let message: RoomIndicatorMessage = {} as any;
+
+  end_of_message: while (!isAtEnd(bb)) {
+    let tag = readVarint32(bb);
+
+    switch (tag >>> 3) {
+      case 0:
+        break end_of_message;
+
+      // optional Common common = 1;
+      case 1: {
+        let limit = pushTemporaryLength(bb);
+        message.common = _decodeCommon(bb);
+        bb.limit = limit;
+        break;
+      }
+
+      // optional string msgId = 2;
+      case 2: {
+        message.msgId = readString(bb, readVarint32(bb));
+        break;
+      }
+
+      // optional string userId = 3;
+      case 3: {
+        message.userId = readString(bb, readVarint32(bb));
+        break;
+      }
+
+      // optional int32 flag = 6;
+      case 6: {
+        message.flag = readVarint32(bb);
+        break;
+      }
+
+      // optional RoomIndicatorData data = 4;
+      case 4: {
+        let limit = pushTemporaryLength(bb);
+        message.data = _decodeRoomIndicatorData(bb);
+        bb.limit = limit;
+        break;
+      }
+
+      // optional string extra = 8;
+      case 8: {
+        message.extra = readString(bb, readVarint32(bb));
+        break;
+      }
+
+      default:
+        skip(bb, tag & 7);
+    }
+  }
+
+  return message;
+}
+
+function _decodeRoomIndicatorData(bb: ByteBuffer): RoomIndicatorData {
+  let message: RoomIndicatorData = {} as any;
+
+  end_of_message: while (!isAtEnd(bb)) {
+    let tag = readVarint32(bb);
+
+    switch (tag >>> 3) {
+      case 0:
+        break end_of_message;
+
+      // optional string redirectUrl = 1;
+      case 1: {
+        message.redirectUrl = readString(bb, readVarint32(bb));
+        break;
+      }
+
+      // optional RoomIndicatorAction action = 2;
+      case 2: {
+        let limit = pushTemporaryLength(bb);
+        message.action = _decodeRoomIndicatorAction(bb);
+        bb.limit = limit;
+        break;
+      }
+
+      // optional RoomIndicatorStatus status = 3;
+      case 3: {
+        let limit = pushTemporaryLength(bb);
+        message.status = _decodeRoomIndicatorStatus(bb);
+        bb.limit = limit;
+        break;
+      }
+
+      // optional string extraData = 4;
+      case 4: {
+        message.extraData = readString(bb, readVarint32(bb));
+        break;
+      }
+
+      default:
+        skip(bb, tag & 7);
+    }
+  }
+
+  return message;
+}
+
+function _decodeRoomIndicatorAction(bb: ByteBuffer): RoomIndicatorAction {
+  let message: RoomIndicatorAction = {} as any;
+
+  end_of_message: while (!isAtEnd(bb)) {
+    let tag = readVarint32(bb);
+
+    switch (tag >>> 3) {
+      case 0:
+        break end_of_message;
+
+      // repeated string iconUrls = 1;
+      case 1: {
+        let values = message.iconUrls || (message.iconUrls = []);
+        values.push(readString(bb, readVarint32(bb)));
+        break;
+      }
+
+      // optional string iconName = 2;
+      case 2: {
+        message.iconName = readString(bb, readVarint32(bb));
+        break;
+      }
+
+      // optional int32 iconWidth = 3;
+      case 3: {
+        message.iconWidth = readVarint32(bb);
+        break;
+      }
+
+      // optional int32 iconHeight = 4;
+      case 4: {
+        message.iconHeight = readVarint32(bb);
+        break;
+      }
+
+      // optional string iconBgColor = 5;
+      case 5: {
+        message.iconBgColor = readString(bb, readVarint32(bb));
+        break;
+      }
+
+      default:
+        skip(bb, tag & 7);
+    }
+  }
+
+  return message;
+}
+
+function _decodeRoomIndicatorStatus(bb: ByteBuffer): RoomIndicatorStatus {
+  let message: RoomIndicatorStatus = {} as any;
+
+  end_of_message: while (!isAtEnd(bb)) {
+    let tag = readVarint32(bb);
+
+    switch (tag >>> 3) {
+      case 0:
+        break end_of_message;
+
+      // optional int32 type = 1;
+      case 1: {
+        message.type = readVarint32(bb);
+        break;
+      }
+
+      // optional int32 level = 2;
+      case 2: {
+        message.level = readVarint32(bb);
+        break;
+      }
+
+      // optional string text = 3;
+      case 3: {
+        message.text = readString(bb, readVarint32(bb));
+        break;
+      }
+
+      // optional int64 expireTime = 6;
+      case 6: {
+        message.expireTime = readVarint64(bb).toNumber();
+        break;
+      }
+
+      // optional string statusText = 7;
+      case 7: {
+        message.statusText = readString(bb, readVarint32(bb));
+        break;
+      }
+
+      default:
+        skip(bb, tag & 7);
+    }
+  }
+
+  return message;
+}
+
+// ============================================================
+// WebcastInRoomBannerMessage - 直播间横幅/活动消息
+// content_type: 26v_3_ad(广告), 25v_11_ai_gift(AI礼物), cube_xxx(魔方/嘉年华),
+//               24v_10_fanspk(粉丝PK), gift_flower(鲜花), exhibition_section(展览)
+// ============================================================
+
+export interface InRoomBannerMessage {
+  common?: Common;
+  msgId?: string;
+  contentType?: string;   // 横幅内容类型
+  data?: Uint8Array;      // 内容数据（根据 contentType 不同结构）
+}
+
+export function decodeInRoomBannerMessage(binary: Uint8Array): InRoomBannerMessage {
+  return _decodeInRoomBannerMessage(wrapByteBuffer(binary));
+}
+
+function _decodeInRoomBannerMessage(bb: ByteBuffer): InRoomBannerMessage {
+  let message: InRoomBannerMessage = {} as any;
+
+  end_of_message: while (!isAtEnd(bb)) {
+    let tag = readVarint32(bb);
+
+    switch (tag >>> 3) {
+      case 0:
+        break end_of_message;
+
+      // optional Common common = 1;
+      case 1: {
+        let limit = pushTemporaryLength(bb);
+        message.common = _decodeCommon(bb);
+        bb.limit = limit;
+        break;
+      }
+
+      // optional string contentType = 2;
+      case 2: {
+        message.contentType = readString(bb, readVarint32(bb));
+        break;
+      }
+
+      // optional bytes data = 3;
+      case 3: {
+        message.data = readBytes(bb, readVarint32(bb));
+        break;
+      }
+
+      // optional string msgId = 4;
+      case 4: {
+        message.msgId = readString(bb, readVarint32(bb));
+        break;
+      }
+
+      default:
+        skip(bb, tag & 7);
+    }
+  }
+
+  return message;
+}
+
 function _decodeQuiz(bb: ByteBuffer): Quiz {
   let message: Quiz = {} as any;
 
