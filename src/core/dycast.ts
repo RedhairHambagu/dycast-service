@@ -13,6 +13,7 @@ import {
   decodeLuckyBoxMessage,
   decodeGiftMessage,
   decodeGiftSortMessage,
+  decodeGrowthTaskMessage,
   decodeInRoomBannerMessage,
   decodeInteractEffectMessage,
   decodeRoomIndicatorMessage,
@@ -208,13 +209,26 @@ export enum CastMethod {
   ROOM_INDICATOR = 'WebcastRoomIndicatorMessage',
   // 164: WebcastInRoomBannerMessage - 直播间横幅/活动消息
   // content_type: 26v_3_ad(广告), 25v_11_ai_gift(AI礼物), cube_xxx(魔方/嘉年华),
-  //               24v_10_fanspk(粉丝PK), gift_flower(鲜花), exhibition_section(展览)
+  //   24v_10_fanspk(粉丝PK), gift_flower(鲜花), exhibition_section(展览)
+  //   24v_x_flash_z(闪购), 25v_7ac_warm(暖场), 25v_7_voice(语音互动),
+  //   23v_8_anchor_flow(主播引流), 25v_11_company(商家), giftwall_mission(礼物墙)
   IN_ROOM_BANNER = 'WebcastInRoomBannerMessage',
   QUIZ_AUDIENCE_STATUS = 'WebcastQuizAudienceStatusMessage',
   TEMP_STATE_AREA_REACH = 'WebcastTempStateAreaReachMessage',
   CORNER_REACH = 'WebcastCornerReachMessage',
   EXHIBITION_CHAT = 'WebcastExhibitionChatMessage',
+  GROWTH_TASK = 'WebcastGrowthTaskMessage',
   LUCKY_BOX = 'WebcastLuckyBoxMessage',
+  // 消息类型记录（来自 protobuf 解析分析）
+  // GrowthTask: 成长任务消息 (10条) - 展览馆经典礼物点亮任务等
+  // AudioChat: 音频聊天消息 (7条) - 音频互动
+  // LuckyBoxEnd: 幸运盒子结束 (1条)
+  // LuckyBoxReward: 幸运盒子奖励 (1条)
+  // LuckyBoxTempStatus: 幸运盒子临时状态 (1条)
+  // PrizeNotice: 奖励公告 (1条)
+  // PullStreamUpdate: 拉流更新 (1条)
+  // CommonBubble: 通用气泡 (1条)
+  // AssetEffectUtil: 资产特效工具 (2条)
   /** 自定义消息 */
   CUSTOM = 'CustomMessage'
 }
@@ -1109,8 +1123,7 @@ export class DyCast {
           processed = true;
           break;
         case CastMethod.IN_ROOM_BANNER:
-          // content_type: 26v_3_ad(广告), 25v_11_ai_gift(AI礼物), cube_xxx(魔方/嘉年华),
-          //               24v_10_fanspk(粉丝PK), gift_flower(鲜花), exhibition_section(展览)
+          // content_type: 广告,AI礼物,魔方,粉丝PK,鲜花,展览,闪购,暖场,语音互动,引流,商家,礼物墙
           message = decodeInRoomBannerMessage(payload);
           data.method = CastMethod.IN_ROOM_BANNER;
           data.content = message.contentType;
@@ -1236,21 +1249,37 @@ export class DyCast {
           data.content = '角落到达';
           processed = true;
           break;
+        case CastMethod.GROWTH_TASK:
+          // task_name: 展览馆经典礼物点亮任务 - 24款
+          // task_desc: 经典礼物指示器进度展示（绑定指示器）
+          message = decodeGrowthTaskMessage(payload);
+          data.method = CastMethod.GROWTH_TASK;
+          data.content = message.taskName || '成长任务';
+          processed = true;
+          break;
         case CastMethod.EXHIBITION_CHAT:
+          // msgType: exhibition_naming_chat_message_v2(冠名), exhibition_lighten_chat_message_v2(点亮)
+          // user 只有 u64 ID，无 nickname
+          // 礼物名称在 ExhibitionChatMessage Field 4 (string)
           message = decodeExhibitionChatMessage(payload);
           data.method = CastMethod.EXHIBITION_CHAT;
           data.user = this._getCastUser(message.user);
-          // 从 template 中提取内容 "{0:user} 成功冠名了{1:string}{2:image}"
-          if (message.exhibition?.template) {
-            const template = message.exhibition.template;
+          const exTemplate = message.template || '';
+          const exGiftName = message.giftName || '';
+          if (message.msgType === 'exhibition_naming_chat_message_v2') {
+            // 冠名：{0:user} 成功冠名了{1:string}{2:image}
             const userName = message.user?.nickname || '用户';
-            const giftName = message.exhibition.gift?.name || '';
-            data.content = template
+            data.content = exTemplate
               .replace('{0:user}', userName)
-              .replace('{1:string}', giftName)
+              .replace('{1:string}', exGiftName)
               .replace('{2:image}', '');
+          } else if (message.msgType === 'exhibition_lighten_chat_message_v2') {
+            // 点亮：恭喜主播成功点亮了{0:string}{1:image}
+            data.content = exTemplate
+              .replace('{0:string}', exGiftName)
+              .replace('{1:image}', '');
           } else {
-            data.content = '冠名消息';
+            data.content = exGiftName || '展馆消息';
           }
           processed = true;
           break;
@@ -1282,8 +1311,7 @@ export class DyCast {
           processed = true;
           break;
         case CastMethod.IN_ROOM_BANNER:
-          // content_type: 26v_3_ad(广告), 25v_11_ai_gift(AI礼物), cube_xxx(魔方/嘉年华),
-          //               24v_10_fanspk(粉丝PK), gift_flower(鲜花), exhibition_section(展览)
+          // content_type: 广告,AI礼物,魔方,粉丝PK,鲜花,展览,闪购,暖场,语音互动,引流,商家,礼物墙
           return null;
         default:
           // 未处理的消息类型

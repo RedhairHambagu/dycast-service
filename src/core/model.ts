@@ -1540,12 +1540,14 @@ function _decodeRoomUserSeqMessage_Contributor(bb: ByteBuffer): RoomUserSeqMessa
   return message;
 }
 
-// ExhibitionChatMessage - 冠名消息（简化版）
+// ExhibitionChatMessage - 展馆消息（冠名/点亮）
+// msgType: exhibition_naming_chat_message_v2(冠名), exhibition_lighten_chat_message_v2(点亮)
+// user 只有 u64 ID，无 nickname；礼物名称在 Field 4 (string)
 export interface ExhibitionChatMessage {
   msgType?: string;
   template?: string;
-  user?: User;
-  gift?: GiftStruct;
+  userId?: string;     // Field 3 u64，用户ID（无nickname）
+  giftName?: string;   // Field 4 礼物名称
 }
 
 export function encodeExhibitionChatMessage(message: ExhibitionChatMessage): Uint8Array {
@@ -1615,11 +1617,9 @@ function _decodeExhibitionChatMessage(bb: ByteBuffer): ExhibitionChatMessage {
         break;
       }
 
-      // optional User user = 4;
+      // optional string giftName = 4;  (礼物名称，如"小心心"、"玫瑰")
       case 4: {
-        let limit = pushTemporaryLength(bb);
-        message.user = _decodeUser(bb);
-        bb.limit = limit;
+        message.giftName = readString(bb, readVarint32(bb));
         break;
       }
 
@@ -22328,6 +22328,71 @@ function _decodeInRoomBannerMessage(bb: ByteBuffer): InRoomBannerMessage {
       // optional string msgId = 4;
       case 4: {
         message.msgId = readString(bb, readVarint32(bb));
+        break;
+      }
+
+      default:
+        skip(bb, tag & 7);
+    }
+  }
+
+  return message;
+}
+
+// ============================================================
+// WebcastGrowthTaskMessage - 成长任务消息（展馆点亮任务）
+// task_name: 展览馆经典礼物点亮任务 - 24款
+// ============================================================
+
+export interface GrowthTaskMessage {
+  taskId?: string;       // Field 1/2 任务实例ID
+  status?: number;       // Field 3 任务状态类型
+  userId?: string;       // Field 8 用户ID
+  taskName?: string;     // Field 9 任务名称
+  taskDesc?: string;     // Field 10 任务描述
+}
+
+export function decodeGrowthTaskMessage(binary: Uint8Array): GrowthTaskMessage {
+  return _decodeGrowthTaskMessage(wrapByteBuffer(binary));
+}
+
+function _decodeGrowthTaskMessage(bb: ByteBuffer): GrowthTaskMessage {
+  let message: GrowthTaskMessage = {} as any;
+
+  end_of_message: while (!isAtEnd(bb)) {
+    let tag = readVarint32(bb);
+
+    switch (tag >>> 3) {
+      case 0:
+        break end_of_message;
+
+      // optional string taskId = 2;
+      case 2: {
+        message.taskId = readString(bb, readVarint32(bb));
+        break;
+      }
+
+      // optional int32 status = 3;
+      case 3: {
+        message.status = readVarint32(bb);
+        break;
+      }
+
+      // optional string userId = 8;
+      case 8: {
+        message.userId = readString(bb, readVarint32(bb));
+        break;
+      }
+
+      // optional string taskName = 9;
+      case 9: {
+        message.taskName = readString(bb, readVarint32(bb));
+        break;
+      }
+
+      // optional string taskDesc = 10;
+      case 10: {
+        message.taskDesc = readString(bb, readVarint32(bb));
         break;
       }
 
