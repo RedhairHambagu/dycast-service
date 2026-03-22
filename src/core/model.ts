@@ -1569,26 +1569,6 @@ function _encodeExhibitionChatMessage(message: ExhibitionChatMessage, bb: ByteBu
     writeVarint32(bb, 18);
     writeString(bb, $template);
   }
-  // optional User user = 4;
-  let $user = message.user;
-  if ($user !== undefined) {
-    writeVarint32(bb, 34);
-    let nested = popByteBuffer();
-    _encodeUser($user, nested);
-    writeVarint32(bb, nested.limit);
-    writeByteBuffer(bb, nested);
-    pushByteBuffer(nested);
-  }
-  // optional GiftStruct gift = 21;
-  let $gift = message.gift;
-  if ($gift !== undefined) {
-    writeVarint32(bb, 170);
-    let nested = popByteBuffer();
-    _encodeGiftStruct($gift, nested);
-    writeVarint32(bb, nested.limit);
-    writeByteBuffer(bb, nested);
-    pushByteBuffer(nested);
-  }
 }
 
 export function decodeExhibitionChatMessage(binary: Uint8Array): ExhibitionChatMessage {
@@ -1617,17 +1597,15 @@ function _decodeExhibitionChatMessage(bb: ByteBuffer): ExhibitionChatMessage {
         break;
       }
 
-      // optional string giftName = 4;  (礼物名称，如"小心心"、"玫瑰")
-      case 4: {
-        message.giftName = readString(bb, readVarint32(bb));
+      // optional int64 userId = 3;  (u64，用户ID，无nickname)
+      case 3: {
+        message.userId = readVarint64(bb, false).toString();
         break;
       }
 
-      // optional GiftStruct gift = 21;
-      case 21: {
-        let limit = pushTemporaryLength(bb);
-        message.gift = _decodeGiftStruct(bb);
-        bb.limit = limit;
+      // optional string giftName = 4;  (礼物名称，如"小心心"、"玫瑰")
+      case 4: {
+        message.giftName = readString(bb, readVarint32(bb));
         break;
       }
 
@@ -5052,157 +5030,6 @@ function _decodeRoomStatsMessage(bb: ByteBuffer): RoomStatsMessage {
       // optional int64 displayType = 10;
       case 10: {
         message.displayType = readVarint64(bb, /* unsigned */ false);
-        break;
-      }
-
-      default:
-        skipUnknownField(bb, tag & 7);
-    }
-  }
-
-  return message;
-}
-
-export interface InRoomBannerMessage {
-  common?: Common;
-  extra?: string;
-  position?: number;
-  actionType?: number;
-  containerUrl?: string;
-  lynxContainerUrl?: string;
-  containerType?: number;
-  opType?: number;
-}
-
-export function encodeInRoomBannerMessage(message: InRoomBannerMessage): Uint8Array {
-  let bb = popByteBuffer();
-  _encodeInRoomBannerMessage(message, bb);
-  return toUint8Array(bb);
-}
-
-function _encodeInRoomBannerMessage(message: InRoomBannerMessage, bb: ByteBuffer): void {
-  // optional Common common = 1;
-  let $common = message.common;
-  if ($common !== undefined) {
-    writeVarint32(bb, 10);
-    let nested = popByteBuffer();
-    _encodeCommon($common, nested);
-    writeVarint32(bb, nested.limit);
-    writeByteBuffer(bb, nested);
-    pushByteBuffer(nested);
-  }
-
-  // optional string extra = 2;
-  let $extra = message.extra;
-  if ($extra !== undefined) {
-    writeVarint32(bb, 18);
-    writeString(bb, $extra);
-  }
-
-  // optional int32 position = 3;
-  let $position = message.position;
-  if ($position !== undefined) {
-    writeVarint32(bb, 24);
-    writeVarint64(bb, intToLong($position));
-  }
-
-  // optional int32 actionType = 4;
-  let $actionType = message.actionType;
-  if ($actionType !== undefined) {
-    writeVarint32(bb, 32);
-    writeVarint64(bb, intToLong($actionType));
-  }
-
-  // optional string containerUrl = 5;
-  let $containerUrl = message.containerUrl;
-  if ($containerUrl !== undefined) {
-    writeVarint32(bb, 42);
-    writeString(bb, $containerUrl);
-  }
-
-  // optional string lynxContainerUrl = 6;
-  let $lynxContainerUrl = message.lynxContainerUrl;
-  if ($lynxContainerUrl !== undefined) {
-    writeVarint32(bb, 50);
-    writeString(bb, $lynxContainerUrl);
-  }
-
-  // optional int32 containerType = 7;
-  let $containerType = message.containerType;
-  if ($containerType !== undefined) {
-    writeVarint32(bb, 56);
-    writeVarint64(bb, intToLong($containerType));
-  }
-
-  // optional int32 opType = 8;
-  let $opType = message.opType;
-  if ($opType !== undefined) {
-    writeVarint32(bb, 64);
-    writeVarint64(bb, intToLong($opType));
-  }
-}
-
-export function decodeInRoomBannerMessage(binary: Uint8Array): InRoomBannerMessage {
-  return _decodeInRoomBannerMessage(wrapByteBuffer(binary));
-}
-
-function _decodeInRoomBannerMessage(bb: ByteBuffer): InRoomBannerMessage {
-  let message: InRoomBannerMessage = {} as any;
-
-  end_of_message: while (!isAtEnd(bb)) {
-    let tag = readVarint32(bb);
-
-    switch (tag >>> 3) {
-      case 0:
-        break end_of_message;
-
-      // optional Common common = 1;
-      case 1: {
-        let limit = pushTemporaryLength(bb);
-        message.common = _decodeCommon(bb);
-        bb.limit = limit;
-        break;
-      }
-
-      // optional string extra = 2;
-      case 2: {
-        message.extra = readString(bb, readVarint32(bb));
-        break;
-      }
-
-      // optional int32 position = 3;
-      case 3: {
-        message.position = readVarint32(bb);
-        break;
-      }
-
-      // optional int32 actionType = 4;
-      case 4: {
-        message.actionType = readVarint32(bb);
-        break;
-      }
-
-      // optional string containerUrl = 5;
-      case 5: {
-        message.containerUrl = readString(bb, readVarint32(bb));
-        break;
-      }
-
-      // optional string lynxContainerUrl = 6;
-      case 6: {
-        message.lynxContainerUrl = readString(bb, readVarint32(bb));
-        break;
-      }
-
-      // optional int32 containerType = 7;
-      case 7: {
-        message.containerType = readVarint32(bb);
-        break;
-      }
-
-      // optional int32 opType = 8;
-      case 8: {
-        message.opType = readVarint32(bb);
         break;
       }
 
@@ -22121,12 +21948,6 @@ function _decodeRoomIndicatorMessage(bb: ByteBuffer): RoomIndicatorMessage {
         break;
       }
 
-      // optional string extra = 8;
-      case 8: {
-        message.extra = readString(bb, readVarint32(bb));
-        break;
-      }
-
       default:
         skip(bb, tag & 7);
     }
@@ -22260,7 +22081,7 @@ function _decodeRoomIndicatorStatus(bb: ByteBuffer): RoomIndicatorStatus {
 
       // optional int64 expireTime = 6;
       case 6: {
-        message.expireTime = readVarint64(bb).toNumber();
+        message.expireTime = readVarint64(bb, false).toNumber();
         break;
       }
 
@@ -22473,6 +22294,223 @@ function _decodeQuiz(bb: ByteBuffer): Quiz {
         message.absoluteEndTime = readVarint64(bb, /* unsigned */ false);
         break;
       }
+
+      default:
+        skipUnknownField(bb, tag & 7);
+    }
+  }
+
+  return message;
+}
+
+// ============================================================
+// 连麦相关消息类型
+// ============================================================
+
+// WebcastLinkerContributeMessage - 连麦贡献消息 (82条)
+// Proto: (1:bytes, 2:varint user_id, 3:varint, 4:bytes, 5:varint timestamp, 6:varint, 7:string, 8:string, 9:bytes)
+export interface LinkerContributeMessage {
+  userId?: string;      // Field 2
+  timestamp?: number;   // Field 5
+}
+
+export function decodeLinkerContributeMessage(binary: Uint8Array): LinkerContributeMessage {
+  return _decodeLinkerContributeMessage(wrapByteBuffer(binary));
+}
+
+function _decodeLinkerContributeMessage(bb: ByteBuffer): LinkerContributeMessage {
+  let message: LinkerContributeMessage = {} as any;
+
+  end_of_message: while (!isAtEnd(bb)) {
+    let tag = readVarint32(bb);
+
+    switch (tag >>> 3) {
+      case 0:
+        break end_of_message;
+
+      // optional int64 userId = 2;
+      case 2: {
+        message.userId = readVarint64(bb, false).toString();
+        break;
+      }
+
+      // optional int64 timestamp = 5;
+      case 5: {
+        message.timestamp = readVarint64(bb, false).toNumber();
+        break;
+      }
+
+      default:
+        skipUnknownField(bb, tag & 7);
+    }
+  }
+
+  return message;
+}
+
+// WebcastLinkMessage - 连麦消息 (27条)
+// Proto: (1:bytes, 2:varint, 3:varint roomId, 4:varint, 9:bytes)
+export interface LinkMessage {
+  roomId?: string;      // Field 3
+}
+
+export function decodeLinkMessage(binary: Uint8Array): LinkMessage {
+  return _decodeLinkMessage(wrapByteBuffer(binary));
+}
+
+function _decodeLinkMessage(bb: ByteBuffer): LinkMessage {
+  let message: LinkMessage = {} as any;
+
+  end_of_message: while (!isAtEnd(bb)) {
+    let tag = readVarint32(bb);
+
+    switch (tag >>> 3) {
+      case 0:
+        break end_of_message;
+
+      // optional int64 roomId = 3;
+      case 3: {
+        message.roomId = readVarint64(bb, false).toString();
+        break;
+      }
+
+      default:
+        skipUnknownField(bb, tag & 7);
+    }
+  }
+
+  return message;
+}
+
+// WebcastLinkMicMethod - 连麦方式配置 (10条)
+// Proto: (1:bytes, 2:varint, 9:varint, 23:varint, 2:varint, 4:bytes, 24:varint, 0:u64, 17:string, 11:unknown)
+export interface LinkMicMethodMessage {
+  method?: string;      // Field 17 = "chat"
+}
+
+export function decodeLinkMicMethod(binary: Uint8Array): LinkMicMethodMessage {
+  return _decodeLinkMicMethod(wrapByteBuffer(binary));
+}
+
+function _decodeLinkMicMethod(bb: ByteBuffer): LinkMicMethodMessage {
+  let message: LinkMicMethodMessage = {} as any;
+
+  end_of_message: while (!isAtEnd(bb)) {
+    let tag = readVarint32(bb);
+
+    switch (tag >>> 3) {
+      case 0:
+        break end_of_message;
+
+      // optional string method = 17;
+      case 17: {
+        message.method = readString(bb, readVarint32(bb));
+        break;
+      }
+
+      default:
+        skipUnknownField(bb, tag & 7);
+    }
+  }
+
+  return message;
+}
+
+// WebcastLinkmicPlayModeUpdateScoreMessage - 连麦分数更新 (4条)
+// Proto: (1:bytes, 2:varint, 3:varint, 4:varint, 5:varint user_id, 6:varint linker_id, 7:varint, 8:varint, 9:varint, 10:string, 11:varint, 14:string, 15:bytes, 16:bytes, 4:unknown)
+export interface LinkmicPlayModeUpdateScoreMessage {
+  userId?: string;      // Field 5
+  linkerId?: string;   // Field 6
+  linkId?: string;      // Field 10
+}
+
+export function decodeLinkmicPlayModeUpdateScoreMessage(binary: Uint8Array): LinkmicPlayModeUpdateScoreMessage {
+  return _decodeLinkmicPlayModeUpdateScoreMessage(wrapByteBuffer(binary));
+}
+
+function _decodeLinkmicPlayModeUpdateScoreMessage(bb: ByteBuffer): LinkmicPlayModeUpdateScoreMessage {
+  let message: LinkmicPlayModeUpdateScoreMessage = {} as any;
+
+  end_of_message: while (!isAtEnd(bb)) {
+    let tag = readVarint32(bb);
+
+    switch (tag >>> 3) {
+      case 0:
+        break end_of_message;
+
+      // optional int64 userId = 5;
+      case 5: {
+        message.userId = readVarint64(bb, false).toString();
+        break;
+      }
+
+      // optional int64 linkerId = 6;
+      case 6: {
+        message.linkerId = readVarint64(bb, false).toString();
+        break;
+      }
+
+      // optional string linkId = 10;
+      case 10: {
+        message.linkId = readString(bb, readVarint32(bb));
+        break;
+      }
+
+      default:
+        skipUnknownField(bb, tag & 7);
+    }
+  }
+
+  return message;
+}
+
+// WebcastLinkSettingNotifyMessage - 连麦设置通知 (2条)
+// Proto: (1:bytes, 2:string)
+export interface LinkSettingNotifyMessage {
+  // 暂无有效数据字段
+}
+
+export function decodeLinkSettingNotifyMessage(binary: Uint8Array): LinkSettingNotifyMessage {
+  return _decodeLinkSettingNotifyMessage(wrapByteBuffer(binary));
+}
+
+function _decodeLinkSettingNotifyMessage(bb: ByteBuffer): LinkSettingNotifyMessage {
+  let message: LinkSettingNotifyMessage = {} as any;
+
+  end_of_message: while (!isAtEnd(bb)) {
+    let tag = readVarint32(bb);
+
+    switch (tag >>> 3) {
+      case 0:
+        break end_of_message;
+
+      default:
+        skipUnknownField(bb, tag & 7);
+    }
+  }
+
+  return message;
+}
+
+// WebcastAudioBGImgMessage - 音频背景图 (1条)
+// Proto: (1:bytes, 2:bytes, 3:varint, 4:varint)
+export interface AudioBGImgMessage {
+  // 暂无有效数据字段
+}
+
+export function decodeAudioBGImgMessage(binary: Uint8Array): AudioBGImgMessage {
+  return _decodeAudioBGImgMessage(wrapByteBuffer(binary));
+}
+
+function _decodeAudioBGImgMessage(bb: ByteBuffer): AudioBGImgMessage {
+  let message: AudioBGImgMessage = {} as any;
+
+  end_of_message: while (!isAtEnd(bb)) {
+    let tag = readVarint32(bb);
+
+    switch (tag >>> 3) {
+      case 0:
+        break end_of_message;
 
       default:
         skipUnknownField(bb, tag & 7);

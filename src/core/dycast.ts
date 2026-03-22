@@ -16,6 +16,12 @@ import {
   decodeGrowthTaskMessage,
   decodeInRoomBannerMessage,
   decodeInteractEffectMessage,
+  decodeLinkerContributeMessage,
+  decodeLinkMessage,
+  decodeLinkMicMethod,
+  decodeLinkmicPlayModeUpdateScoreMessage,
+  decodeLinkSettingNotifyMessage,
+  decodeAudioBGImgMessage,
   decodeRoomIndicatorMessage,
   decodeLikeMessage,
   decodeMemberMessage,
@@ -211,7 +217,7 @@ export enum CastMethod {
   // content_type: 26v_3_ad(广告), 25v_11_ai_gift(AI礼物), cube_xxx(魔方/嘉年华),
   //   24v_10_fanspk(粉丝PK), gift_flower(鲜花), exhibition_section(展览)
   //   24v_x_flash_z(闪购), 25v_7ac_warm(暖场), 25v_7_voice(语音互动),
-  //   23v_8_anchor_flow(主播引流), 25v_11_company(商家), giftwall_mission(礼物墙)
+  //   23v_8_anchor_flow(主播引流), 25v_11_company(商家), giftwall_mission(礼物墙), giftwall_mission_linkmic(礼物墙连麦)
   IN_ROOM_BANNER = 'WebcastInRoomBannerMessage',
   QUIZ_AUDIENCE_STATUS = 'WebcastQuizAudienceStatusMessage',
   TEMP_STATE_AREA_REACH = 'WebcastTempStateAreaReachMessage',
@@ -219,6 +225,12 @@ export enum CastMethod {
   EXHIBITION_CHAT = 'WebcastExhibitionChatMessage',
   GROWTH_TASK = 'WebcastGrowthTaskMessage',
   LUCKY_BOX = 'WebcastLuckyBoxMessage',
+  LINKER_CONTRIBUTE = 'WebcastLinkerContributeMessage',
+  LINK_MESSAGE = 'WebcastLinkMessage',
+  LINK_MIC_METHOD = 'WebcastLinkMicMethod',
+  LINKMIC_PLAY_MODE_UPDATE_SCORE = 'WebcastLinkmicPlayModeUpdateScoreMessage',
+  LINK_SETTING_NOTIFY = 'WebcastLinkSettingNotifyMessage',
+  AUDIO_BG_IMG = 'WebcastAudioBGImgMessage',
   // 消息类型记录（来自 protobuf 解析分析）
   // GrowthTask: 成长任务消息 (10条) - 展览馆经典礼物点亮任务等
   // AudioChat: 音频聊天消息 (7条) - 音频互动
@@ -229,6 +241,12 @@ export enum CastMethod {
   // PullStreamUpdate: 拉流更新 (1条)
   // CommonBubble: 通用气泡 (1条)
   // AssetEffectUtil: 资产特效工具 (2条)
+  // LinkerContribute: 连麦贡献消息 (82条) - Field 2=user_id, Field 4=贡献数据, Field 7/8=值"1"
+  // LinkMessage: 连麦消息 (27条) - Field 3=roomId, Field 9=连麦详情数据
+  // LinkMicMethod: 连麦方式配置 (10条) - Field 17="chat", Field 0/24=配置数据
+  // LinkmicPlayModeUpdateScore: 连麦分数更新 (4条) - Field 5=user_id, Field 6=linker_id, Field 10/14=连麦标识
+  // LinkSettingNotify: 连麦设置通知 (2条) - Field 2=\b> \x01 (二进制)
+  // AudioBGImg: 音频背景图 (1条) - Field 2=背景图数据, Field 3/4=值1/3
   /** 自定义消息 */
   CUSTOM = 'CustomMessage'
 }
@@ -1123,7 +1141,7 @@ export class DyCast {
           processed = true;
           break;
         case CastMethod.IN_ROOM_BANNER:
-          // content_type: 广告,AI礼物,魔方,粉丝PK,鲜花,展览,闪购,暖场,语音互动,引流,商家,礼物墙
+          // content_type: 广告,AI礼物,魔方,粉丝PK,鲜花,展览,闪购,暖场,语音互动,引流,商家,礼物墙,礼物墙连麦
           message = decodeInRoomBannerMessage(payload);
           data.method = CastMethod.IN_ROOM_BANNER;
           data.content = message.contentType;
@@ -1259,16 +1277,16 @@ export class DyCast {
           break;
         case CastMethod.EXHIBITION_CHAT:
           // msgType: exhibition_naming_chat_message_v2(冠名), exhibition_lighten_chat_message_v2(点亮)
-          // user 只有 u64 ID，无 nickname
+          // userId 在 Field 3 (u64)，无 nickname
           // 礼物名称在 ExhibitionChatMessage Field 4 (string)
           message = decodeExhibitionChatMessage(payload);
           data.method = CastMethod.EXHIBITION_CHAT;
-          data.user = this._getCastUser(message.user);
+          data.user = { name: message.userId || '用户' };
           const exTemplate = message.template || '';
           const exGiftName = message.giftName || '';
           if (message.msgType === 'exhibition_naming_chat_message_v2') {
             // 冠名：{0:user} 成功冠名了{1:string}{2:image}
-            const userName = message.user?.nickname || '用户';
+            const userName = message.userId || '用户';
             data.content = exTemplate
               .replace('{0:user}', userName)
               .replace('{1:string}', exGiftName)
@@ -1303,6 +1321,48 @@ export class DyCast {
           }
           processed = true;
           break;
+        case CastMethod.LINKER_CONTRIBUTE:
+          // 连麦贡献消息: Field 2=user_id, Field 7/8=值"1"
+          message = decodeLinkerContributeMessage(payload);
+          data.method = CastMethod.LINKER_CONTRIBUTE;
+          data.content = `连麦贡献: ${message.userId || ''}`;
+          processed = true;
+          break;
+        case CastMethod.LINK_MESSAGE:
+          // 连麦消息: Field 3=roomId
+          message = decodeLinkMessage(payload);
+          data.method = CastMethod.LINK_MESSAGE;
+          data.content = `连麦消息`;
+          processed = true;
+          break;
+        case CastMethod.LINK_MIC_METHOD:
+          // 连麦方式: Field 17="chat"
+          message = decodeLinkMicMethod(payload);
+          data.method = CastMethod.LINK_MIC_METHOD;
+          data.content = `连麦方式`;
+          processed = true;
+          break;
+        case CastMethod.LINKMIC_PLAY_MODE_UPDATE_SCORE:
+          // 连麦分数更新: Field 5=user_id, Field 6=linker_id
+          message = decodeLinkmicPlayModeUpdateScoreMessage(payload);
+          data.method = CastMethod.LINKMIC_PLAY_MODE_UPDATE_SCORE;
+          data.content = `连麦分数更新`;
+          processed = true;
+          break;
+        case CastMethod.LINK_SETTING_NOTIFY:
+          // 连麦设置通知
+          message = decodeLinkSettingNotifyMessage(payload);
+          data.method = CastMethod.LINK_SETTING_NOTIFY;
+          data.content = `连麦设置`;
+          processed = true;
+          break;
+        case CastMethod.AUDIO_BG_IMG:
+          // 音频背景图
+          message = decodeAudioBGImgMessage(payload);
+          data.method = CastMethod.AUDIO_BG_IMG;
+          data.content = `音频背景`;
+          processed = true;
+          break;
         case CastMethod.ROOM_INDICATOR:
           // data.status.text(加热值), data.status.statusText(状态)
           message = decodeRoomIndicatorMessage(payload);
@@ -1310,9 +1370,6 @@ export class DyCast {
           data.content = message.data?.status?.statusText || message.data?.status?.text || '';
           processed = true;
           break;
-        case CastMethod.IN_ROOM_BANNER:
-          // content_type: 广告,AI礼物,魔方,粉丝PK,鲜花,展览,闪购,暖场,语音互动,引流,商家,礼物墙
-          return null;
         default:
           // 未处理的消息类型
           if (method) {

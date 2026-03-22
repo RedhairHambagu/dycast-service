@@ -441,8 +441,8 @@ const handleMessages = function (msgs: DyMessage[]) {
           // 注意：msg.content 已经在 dycast.ts 中被格式化过了
           newCasts.push(msg);
           allCastsNew.push(msg);
-          // 只有这两种类型才添加到主列表
-          if (msg.bizScene === 'star_guard_activate_text' || msg.bizScene === 'subscribe_anchor_mvp_v2') {
+          // 只有这三种类型才添加到主列表
+          if (msg.bizScene === 'star_guard_activate_text' || msg.bizScene === 'subscribe_anchor_mvp_v2' || msg.bizScene === 'pk_draw_prop_card_tip') {
             mainCasts.push(msg);
           }
           break;
