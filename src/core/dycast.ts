@@ -9,6 +9,7 @@ import {
   decodeCornerReachMessage,
   decodeEmojiChatMessage,
   decodeExhibitionChatMessage,
+  decodeWebcastExhibitionChatMessage,
   decodeFansclubMessage,
   decodeLuckyBoxMessage,
   decodeGiftMessage,
@@ -1279,19 +1280,21 @@ export class DyCast {
           // msgType: exhibition_naming_chat_message_v2(冠名), exhibition_lighten_chat_message_v2(点亮)
           // userId 在 Field 3 (u64)，无 nickname
           // 礼物名称在 ExhibitionChatMessage Field 4 (string)
-          message = decodeExhibitionChatMessage(payload);
+          // payload 是 WebcastExhibitionChatMessage，需要先解码外层，再取 exhibition 字段
+          const webcastExhibition = decodeWebcastExhibitionChatMessage(payload);
+          const exhibition = webcastExhibition.exhibition || {} as any;
           data.method = CastMethod.EXHIBITION_CHAT;
-          data.user = { name: message.userId || '用户' };
-          const exTemplate = message.template || '';
-          const exGiftName = message.giftName || '';
-          if (message.msgType === 'exhibition_naming_chat_message_v2') {
+          data.user = { name: exhibition.userId || '用户' };
+          const exTemplate = exhibition.template || '';
+          const exGiftName = exhibition.giftName || '';
+          if (exhibition.msgType === 'exhibition_naming_chat_message_v2') {
             // 冠名：{0:user} 成功冠名了{1:string}{2:image}
-            const userName = message.userId || '用户';
+            const userName = exhibition.userId || '用户';
             data.content = exTemplate
               .replace('{0:user}', userName)
               .replace('{1:string}', exGiftName)
               .replace('{2:image}', '');
-          } else if (message.msgType === 'exhibition_lighten_chat_message_v2') {
+          } else if (exhibition.msgType === 'exhibition_lighten_chat_message_v2') {
             // 点亮：恭喜主播成功点亮了{0:string}{1:image}
             data.content = exTemplate
               .replace('{0:string}', exGiftName)
