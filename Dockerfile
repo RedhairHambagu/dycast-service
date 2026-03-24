@@ -41,8 +41,19 @@ FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/nginx:alpine
 # 配置 Alpine 镜像加速
 RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.tencent.com/g' /etc/apk/repositories
 
-# 加载 njs 模块（用于 URL 解码 Cookie）
-RUN sed -i '1i load_module modules/ngx_http_js_module.so;' /etc/nginx/nginx.conf
+# 尝试安装 njs 模块（nginx:alpine 默认不包含 njs）
+# nginx-njs 包存在于 Alpine 3.19+ 版本
+RUN apk add --no-cache nginx-njs 2>/dev/null || \
+    echo "Warning: nginx-njs not available in apk, trying alternative..."
+
+# 查找 njs 模块路径并配置 load_module
+RUN NJS_MODULE=$(find /usr -name "ngx_http_js_module.so" 2>/dev/null | head -1) && \
+    if [ -n "$NJS_MODULE" ]; then \
+        sed -i "1i load_module ${NJS_MODULE};" /etc/nginx/nginx.conf; \
+        echo "Loaded njs from: ${NJS_MODULE}"; \
+    else \
+        echo "Warning: njs module not found, WebSocket cookie decode will not work"; \
+    fi
 
 # 复制自定义 nginx 配置和 njs 脚本
 COPY nginx.conf /etc/nginx/conf.d/default.conf
