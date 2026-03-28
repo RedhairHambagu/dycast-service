@@ -1097,7 +1097,7 @@ export class DyCast {
           message = decodeRoomMessage(payload);
           data.method = CastMethod.ROOM_MESSAGE;
           data.bizScene = message.bizScene;
-          
+
           // 格式化消息内容（优先级：displayText > content > bizScene）
           const displayText = message.common?.displayText;
           if (displayText) {
@@ -1109,7 +1109,7 @@ export class DyCast {
           if (!data.content) {
             data.content = message.bizScene || '房间消息';
           }
-          
+
           processed = true;
           break;
         case CastMethod.FANSCLUB:
@@ -1144,6 +1144,14 @@ export class DyCast {
         case CastMethod.IN_ROOM_BANNER:
           // content_type: 广告,AI礼物,魔方,粉丝PK,鲜花,展览,闪购,暖场,语音互动,引流,商家,礼物墙,礼物墙连麦
           message = decodeInRoomBannerMessage(payload);
+          // 过滤心愿单消息（wishList 在 data 字段的 JSON 里）
+          if (message.data) {
+            const dataStr = new TextDecoder().decode(message.data);
+            if (dataStr.includes('wishList')) {
+              processed = true;
+              return null;
+            }
+          }
           data.method = CastMethod.IN_ROOM_BANNER;
           data.content = message.contentType;
           processed = true;
@@ -1300,7 +1308,9 @@ export class DyCast {
               .replace('{0:string}', exGiftName)
               .replace('{1:image}', '');
           } else {
-            data.content = exGiftName || '展馆消息';
+            const payloadBase64 = btoa(String.fromCharCode(...payload));
+            CLog.debug(`[EXHIBITION] payload_base64: ${payloadBase64}`);
+            data.content = exTemplate || exGiftName || '展馆消息';
           }
           processed = true;
           break;
