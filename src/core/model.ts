@@ -1542,12 +1542,59 @@ function _decodeRoomUserSeqMessage_Contributor(bb: ByteBuffer): RoomUserSeqMessa
 
 // ExhibitionChatMessage - 展馆消息（冠名/点亮）
 // msgType: exhibition_naming_chat_message_v2(冠名), exhibition_lighten_chat_message_v2(点亮)
-// user 只有 u64 ID，无 nickname；礼物名称在 Field 4 (string)
 export interface ExhibitionChatMessage {
-  msgType?: string;
-  template?: string;
-  userId?: string;     // Field 3 u64，用户ID（无nickname）
-  giftName?: string;   // Field 4 礼物名称
+  msgType?: string;        // Field 1: message_type
+  template?: string;       // Field 6: content_template
+  style?: TextStyle;        // Field 3: nested TextStyle
+  contents?: ContentItem[]; // Field 4: repeated ContentItem (wire 3 START GROUP)
+  extra1?: number;          // Field 18: varint
+  extra2?: number;          // Field 20: varint
+}
+
+// TextStyle (Field 3 nested)
+export interface TextStyle {
+  color?: string;      // Field 1: "#FFFFFF"
+  fontSize?: number;   // Field 4: 400
+}
+
+// ContentItem (Field 4 repeated)
+export interface ContentItem {
+  type?: number;        // Field 1: type discriminator (11=User, 1=Text, 15=Image)
+  style?: TextStyle;    // Field 2: nested TextStyle
+  text?: string;        // Field 11: text content (when type=1)
+  userContent?: UserContent; // Field 21: nested UserContent (when type=11)
+  imageContent?: ImageContent; // Field 25: nested ImageContent (when type=15)
+}
+
+// UserContent (Field 21 nested)
+export interface UserContent {
+  id?: string;          // Field 1: user ID
+  nickname?: string;    // Field 3: "尼克Nic"
+  displayName?: string; // Field 68: display name
+}
+
+// ImageContent (Field 25 nested)
+export interface ImageContent {
+  urls?: string[];      // Field 1: repeated string URLs
+  uri?: string;         // Field 2: image URI
+  color?: string;       // Field 5: "#CCA3A3"
+}
+
+// GiftDetail for exhibition messages
+export interface GiftDetail {
+  detail?: GiftDetailItem[];
+}
+
+// GiftDetailItem - items in the detail array
+export interface GiftDetailItem {
+  name?: string;       // Field 1: gift name
+  value?: string;      // Field 2: value
+}
+
+// Image item in Field 4
+export interface ImageItem {
+  index?: number;      // Field 1: index
+  url?: string;        // Field 7 or nested Field 1: image URL
 }
 
 export function encodeExhibitionChatMessage(message: ExhibitionChatMessage): Uint8Array {
@@ -1578,39 +1625,365 @@ export function decodeExhibitionChatMessage(binary: Uint8Array): ExhibitionChatM
 function _decodeExhibitionChatMessage(bb: ByteBuffer): ExhibitionChatMessage {
   let message: ExhibitionChatMessage = {} as any;
 
+  console.log('[ExhibitionChat] START offset=', bb.offset, 'limit=', bb.limit);
+
   end_of_message: while (!isAtEnd(bb)) {
     let tag = readVarint32(bb);
+    const wireType = tag & 7;
+    const fieldNum = tag >>> 3;
 
-    switch (tag >>> 3) {
-      case 0:
-        break end_of_message;
+    // END GROUP (wire type 4) just marks a boundary - consume and continue
+    if (fieldNum === 0) {
+      console.log('[ExhibitionChat] BREAK at field 0, offset=', bb.offset);
+      break end_of_message;
+    }
+    if (wireType === 4) {
+      console.log('[ExhibitionChat] END GROUP for field', fieldNum, 'offset=', bb.offset);
+      continue; // Just consume the END GROUP tag, don't break
+    }
 
+    console.log('[ExhibitionChat] field', fieldNum, 'wire', wireType);
+
+    switch (fieldNum) {
       // optional string msgType = 1;
       case 1: {
-        message.msgType = readString(bb, readVarint32(bb));
+        if (wireType === 2) {
+          const len = readVarint32(bb);
+          message.msgType = readString(bb, len);
+          console.log('[ExhibitionChat] Field 1 len=', len, 'msgType=', message.msgType?.substring?.(0, 30));
+        } else {
+          skipUnknownField(bb, wireType);
+        }
         break;
       }
 
       // optional string template = 2;
       case 2: {
-        message.template = readString(bb, readVarint32(bb));
+        if (wireType === 2) {
+          const len = readVarint32(bb);
+          message.template = readString(bb, len);
+        } else {
+          skipUnknownField(bb, wireType);
+        }
         break;
       }
 
-      // optional int64 userId = 3;  (u64，用户ID，无nickname)
+      // optional TextStyle style = 3; (nested protobuf, wire 2)
       case 3: {
-        message.userId = readVarint64(bb, false).toString();
+        if (wireType === 2) {
+          let limit = pushTemporaryLength(bb);
+          message.style = _decodeTextStyle(bb);
+          bb.limit = limit;
+          console.log('[ExhibitionChat] Field 3 style parsed, color=', message.style?.color);
+        } else {
+          skipUnknownField(bb, wireType);
+        }
         break;
       }
 
-      // optional string giftName = 4;  (礼物名称，如"小心心"、"玫瑰")
+      // repeated ContentItem content = 4; (wire 3 = START GROUP)
       case 4: {
-        message.giftName = readString(bb, readVarint32(bb));
+        if (wireType === 3) {
+          // START GROUP - decode ContentItem until END GROUP
+          if (!message.contents) message.contents = [];
+          const item = _decodeContentItem(bb);
+          message.contents.push(item);
+          console.log('[ExhibitionChat] Field 4 ContentItem parsed, type=', item.type);
+        } else if (wireType === 2) {
+          // Some versions use LENDELIM instead of START GROUP
+          let limit = pushTemporaryLength(bb);
+          const item = _decodeContentItem(bb);
+          bb.limit = limit;
+          if (!message.contents) message.contents = [];
+          message.contents.push(item);
+          console.log('[ExhibitionChat] Field 4 ContentItem (LENDELIM) parsed, type=', item.type);
+        } else {
+          skipUnknownField(bb, wireType);
+        }
         break;
       }
 
       default:
-        skipUnknownField(bb, tag & 7);
+        console.log('[ExhibitionChat] Skipping field', fieldNum, 'wire', wireType);
+        skipUnknownField(bb, wireType);
+    }
+  }
+
+  console.log('[ExhibitionChat] END offset=', bb.offset, 'limit=', bb.limit);
+  return message;
+}
+
+// GiftDetail decoder
+function _decodeGiftDetail(bb: ByteBuffer): GiftDetail {
+  let message: GiftDetail = {} as any;
+  console.log('[GiftDetail] START offset=', bb.offset, 'limit=', bb.limit);
+
+  end_of_message: while (!isAtEnd(bb)) {
+    let tag = readVarint32(bb);
+    const wireType = tag & 7;
+    const fieldNum = tag >>> 3;
+
+    if (fieldNum === 0) break end_of_message;
+    if (wireType === 4) continue; // END GROUP
+
+    switch (fieldNum) {
+      // repeated GiftDetailItem detail = 1;
+      case 1: {
+        if (wireType === 2) {
+          let limit = pushTemporaryLength(bb);
+          let item: GiftDetailItem = {} as any;
+          item = _decodeGiftDetailItem(bb);
+          if (!message.detail) message.detail = [];
+          message.detail.push(item);
+          bb.limit = limit;
+          console.log('[GiftDetail] Field 1 detail item parsed');
+        } else {
+          skipUnknownField(bb, wireType);
+        }
+        break;
+      }
+
+      default:
+        skipUnknownField(bb, wireType);
+    }
+  }
+
+  console.log('[GiftDetail] END offset=', bb.offset);
+  return message;
+}
+
+// GiftDetailItem decoder
+function _decodeGiftDetailItem(bb: ByteBuffer): GiftDetailItem {
+  let message: GiftDetailItem = {} as any;
+
+  end_of_message: while (!isAtEnd(bb)) {
+    let tag = readVarint32(bb);
+    const wireType = tag & 7;
+    const fieldNum = tag >>> 3;
+
+    if (fieldNum === 0) break end_of_message;
+    if (wireType === 4) continue; // END GROUP
+
+    switch (fieldNum) {
+      // optional string name = 1;
+      case 1: {
+        if (wireType === 2) {
+          message.name = readString(bb, readVarint32(bb));
+          console.log('[GiftDetailItem] Field 1 name=', message.name);
+        } else {
+          skipUnknownField(bb, wireType);
+        }
+        break;
+      }
+
+      // optional string value = 2;
+      case 2: {
+        if (wireType === 2) {
+          message.value = readString(bb, readVarint32(bb));
+        } else {
+          skipUnknownField(bb, wireType);
+        }
+        break;
+      }
+
+      default:
+        skipUnknownField(bb, wireType);
+    }
+  }
+
+  return message;
+}
+
+// TextStyle decoder (Field 3 of ExhibitionChat)
+function _decodeTextStyle(bb: ByteBuffer): TextStyle {
+  let message: TextStyle = {} as any;
+  console.log('[TextStyle] START offset=', bb.offset, 'limit=', bb.limit);
+
+  end_of_message: while (!isAtEnd(bb)) {
+    let tag = readVarint32(bb);
+    const wireType = tag & 7;
+    const fieldNum = tag >>> 3;
+
+    if (fieldNum === 0) break end_of_message;
+    if (wireType === 4) continue; // END GROUP
+
+    switch (fieldNum) {
+      // optional string color = 1;
+      case 1: {
+        if (wireType === 2) {
+          const len = readVarint32(bb);
+          message.color = readString(bb, len);
+          console.log('[TextStyle] Field 1 len=', len, 'color=', message.color);
+        } else {
+          skipUnknownField(bb, wireType);
+        }
+        break;
+      }
+      // optional int32 fontSize = 2;
+      case 2: {
+        if (wireType === 0) {
+          message.fontSize = readVarint32(bb);
+          console.log('[TextStyle] Field 2 fontSize=', message.fontSize);
+        } else {
+          skipUnknownField(bb, wireType);
+        }
+        break;
+      }
+      default:
+        skipUnknownField(bb, wireType);
+    }
+  }
+
+  console.log('[TextStyle] END offset=', bb.offset);
+  return message;
+}
+
+// ContentItem decoder (Field 4 repeated)
+function _decodeContentItem(bb: ByteBuffer): ContentItem {
+  let message: ContentItem = {} as any;
+  console.log('[ContentItem] START offset=', bb.offset, 'limit=', bb.limit);
+
+  end_of_message: while (!isAtEnd(bb)) {
+    let tag = readVarint32(bb);
+    const wireType = tag & 7;
+    const fieldNum = tag >>> 3;
+
+    if (fieldNum === 0) break end_of_message;
+    if (wireType === 4) {
+      console.log('[ContentItem] END GROUP at offset=', bb.offset);
+      break; // END GROUP ends this item
+    }
+
+    switch (fieldNum) {
+      // optional uint32 type = 1; (discriminator: 11=User, 1=Text, 15=Image)
+      case 1: {
+        if (wireType === 0) {
+          message.type = readVarint32(bb);
+          console.log('[ContentItem] Field 1 type=', message.type);
+        } else {
+          skipUnknownField(bb, wireType);
+        }
+        break;
+      }
+      // optional TextStyle style = 2;
+      case 2: {
+        if (wireType === 2) {
+          let limit = pushTemporaryLength(bb);
+          message.style = _decodeTextStyle(bb);
+          bb.limit = limit;
+          console.log('[ContentItem] Field 2 style parsed');
+        } else {
+          skipUnknownField(bb, wireType);
+        }
+        break;
+      }
+      // optional UserContent user = 21;
+      case 21: {
+        if (wireType === 2) {
+          let limit = pushTemporaryLength(bb);
+          message.userContent = _decodeUserContent(bb);
+          bb.limit = limit;
+        } else {
+          skipUnknownField(bb, wireType);
+        }
+        break;
+      }
+      // optional string text = 11; (for type=1)
+      case 11: {
+        if (wireType === 2) {
+          const len = readVarint32(bb);
+          message.text = readString(bb, len);
+          console.log('[ContentItem] Field 11 text=', message.text);
+        } else {
+          skipUnknownField(bb, wireType);
+        }
+        break;
+      }
+      // optional ImageContent image = 25; (for type=15)
+      case 25: {
+        if (wireType === 2) {
+          let limit = pushTemporaryLength(bb);
+          message.imageContent = _decodeImageContent(bb);
+          bb.limit = limit;
+          console.log('[ContentItem] Field 25 imageContent parsed');
+        } else {
+          skipUnknownField(bb, wireType);
+        }
+        break;
+      }
+      default:
+        skipUnknownField(bb, wireType);
+    }
+  }
+
+  console.log('[ContentItem] END offset=', bb.offset);
+  return message;
+}
+
+// UserContent decoder (Field 21 nested in ContentItem)
+function _decodeUserContent(bb: ByteBuffer): UserContent {
+  let message: UserContent = {} as any;
+
+  end_of_message: while (!isAtEnd(bb)) {
+    let tag = readVarint32(bb);
+    const wireType = tag & 7;
+    const fieldNum = tag >>> 3;
+
+    if (fieldNum === 0) break end_of_message;
+    if (wireType === 4) continue; // END GROUP
+
+    switch (fieldNum) {
+      // nested User user = 1;
+      case 1: {
+        if (wireType === 2) {
+          let limit = pushTemporaryLength(bb);
+          let user = _decodeUser(bb);
+          bb.limit = limit;
+          message.id = user.id;
+          message.nickname = user.nickname;
+          message.displayName = user.displayId || user.nickname;
+        } else {
+          skipUnknownField(bb, wireType);
+        }
+        break;
+      }
+      default:
+        skipUnknownField(bb, wireType);
+    }
+  }
+
+  return message;
+}
+
+// ImageContent decoder (Field 25 nested in ContentItem)
+function _decodeImageContent(bb: ByteBuffer): ImageContent {
+  let message: ImageContent = {} as any;
+
+  end_of_message: while (!isAtEnd(bb)) {
+    let tag = readVarint32(bb);
+    const wireType = tag & 7;
+    const fieldNum = tag >>> 3;
+
+    if (fieldNum === 0) break end_of_message;
+    if (wireType === 4) continue; // END GROUP
+
+    switch (fieldNum) {
+      // optional Image image = 1;
+      case 1: {
+        if (wireType === 2) {
+          let limit = pushTemporaryLength(bb);
+          let img = _decodeImage(bb);
+          if (img.urlList) message.urls = img.urlList;
+          if (img.uri) message.uri = img.uri;
+          if (img.avgColor) message.color = img.avgColor;
+          bb.limit = limit;
+        } else {
+          skipUnknownField(bb, wireType);
+        }
+        break;
+      }
+      default:
+        skipUnknownField(bb, wireType);
     }
   }
 
@@ -1619,10 +1992,8 @@ function _decodeExhibitionChatMessage(bb: ByteBuffer): ExhibitionChatMessage {
 
 // WebcastExhibitionChatMessage - 外层消息
 export interface WebcastExhibitionChatMessage {
-  common?: Common;
-  msgId?: string;
-  user?: User;
-  exhibition?: ExhibitionChatMessage;
+  common?: Common;      // Field 1: Common protobuf
+  exhibition?: ExhibitionChatMessage;  // Field 2: nested protobuf
 }
 
 export function encodeWebcastExhibitionChatMessage(message: WebcastExhibitionChatMessage): Uint8Array {
@@ -1642,26 +2013,10 @@ function _encodeWebcastExhibitionChatMessage(message: WebcastExhibitionChatMessa
     writeByteBuffer(bb, nested);
     pushByteBuffer(nested);
   }
-  // optional string msgId = 2;
-  let $msgId = message.msgId;
-  if ($msgId !== undefined) {
-    writeVarint32(bb, 18);
-    writeString(bb, $msgId);
-  }
-  // optional User user = 4;
-  let $user = message.user;
-  if ($user !== undefined) {
-    writeVarint32(bb, 34);
-    let nested = popByteBuffer();
-    _encodeUser($user, nested);
-    writeVarint32(bb, nested.limit);
-    writeByteBuffer(bb, nested);
-    pushByteBuffer(nested);
-  }
-  // optional ExhibitionChatMessage exhibition = 8;
+  // optional ExhibitionChatMessage exhibition = 2;
   let $exhibition = message.exhibition;
   if ($exhibition !== undefined) {
-    writeVarint32(bb, 66);
+    writeVarint32(bb, 18);
     let nested = popByteBuffer();
     _encodeExhibitionChatMessage($exhibition, nested);
     writeVarint32(bb, nested.limit);
@@ -1679,43 +2034,38 @@ function _decodeWebcastExhibitionChatMessage(bb: ByteBuffer): WebcastExhibitionC
 
   end_of_message: while (!isAtEnd(bb)) {
     let tag = readVarint32(bb);
+    const wireType = tag & 7;
+    const fieldNum = tag >>> 3;
 
-    switch (tag >>> 3) {
-      case 0:
-        break end_of_message;
+    if (fieldNum === 0) break end_of_message;
 
+    switch (fieldNum) {
       // optional Common common = 1;
       case 1: {
-        let limit = pushTemporaryLength(bb);
-        message.common = _decodeCommon(bb);
-        bb.limit = limit;
+        if (wireType === 2) {
+          let limit = pushTemporaryLength(bb);
+          message.common = _decodeCommon(bb);
+          bb.limit = limit;
+        } else {
+          skipUnknownField(bb, wireType);
+        }
         break;
       }
 
-      // optional string msgId = 2;
+      // optional ExhibitionChatMessage exhibition = 2;
       case 2: {
-        message.msgId = readString(bb, readVarint32(bb));
-        break;
-      }
-
-      // optional User user = 4;
-      case 4: {
-        let limit = pushTemporaryLength(bb);
-        message.user = _decodeUser(bb);
-        bb.limit = limit;
-        break;
-      }
-
-      // optional ExhibitionChatMessage exhibition = 8;
-      case 8: {
-        let limit = pushTemporaryLength(bb);
-        message.exhibition = _decodeExhibitionChatMessage(bb);
-        bb.limit = limit;
+        if (wireType === 2) {
+          let limit = pushTemporaryLength(bb);
+          message.exhibition = _decodeExhibitionChatMessage(bb);
+          bb.limit = limit;
+        } else {
+          skipUnknownField(bb, wireType);
+        }
         break;
       }
 
       default:
-        skipUnknownField(bb, tag & 7);
+        skipUnknownField(bb, wireType);
     }
   }
 
@@ -8349,8 +8699,12 @@ function _decodeCommon(bb: ByteBuffer): Common {
       // optional Text displayText = 8;
       case 8: {
         let limit = pushTemporaryLength(bb);
-        message.displayText = _decodeText(bb);
-        bb.limit = limit;
+        try {
+          message.displayText = _decodeText(bb);
+        } catch (e) {
+          // Ignore decoding errors if the data does not perfectly match Text (e.g. ExhibitionChatMessage using Text piece format)
+        }
+        bb.offset = bb.limit = limit; // Safely skip to end of this field
         break;
       }
 
@@ -22534,21 +22888,40 @@ function pushTemporaryLength(bb: ByteBuffer): number {
 }
 
 function skipUnknownField(bb: ByteBuffer, type: number): void {
-  switch (type) {
-    case 0:
-      while (readByte(bb) & 0x80) {}
-      break;
-    case 2:
-      skip(bb, readVarint32(bb));
-      break;
-    case 5:
-      skip(bb, 4);
-      break;
-    case 1:
-      skip(bb, 8);
-      break;
-    default:
-      throw new Error('Unimplemented type: ' + type);
+  try {
+    switch (type) {
+      case 0:
+        while (readByte(bb) & 0x80) {}
+        break;
+      case 2:
+        skip(bb, readVarint32(bb));
+        break;
+      case 5:
+        skip(bb, 4);
+        break;
+      case 1:
+        skip(bb, 8);
+        break;
+      case 3:
+        // Start group - skip to matching end group
+        while (!isAtEnd(bb)) {
+          const tag = readVarint32(bb);
+          const wireType = tag & 7;
+          if (wireType === 4) break; // end group
+          skipUnknownField(bb, wireType);
+        }
+        break;
+      case 4:
+        // End group - nothing to skip
+        break;
+      default:
+        // Unknown type - try to skip 1 byte
+        if (!isAtEnd(bb)) skip(bb, 1);
+        break;
+    }
+  } catch (e) {
+    // If skip fails, try to continue from current position
+    // This shouldn't happen with well-formed protobuf
   }
 }
 

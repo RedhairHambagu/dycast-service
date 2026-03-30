@@ -97,14 +97,14 @@ const isHighValueGift = computed(() => {
 
 // 判断是否可复制
 const isCopyable = computed(() => {
-  return isHighValueGift.value || props.method === CastMethod.ROOM_MESSAGE;
+  return isHighValueGift.value || props.method === CastMethod.ROOM_MESSAGE || props.method === CastMethod.EXHIBITION_CHAT;
 });
 
 // 获取纯文本内容
 const getTextContent = (): string => {
   const userName = props.user?.name || 'unknown';
   let content = '';
-  
+
   if (isHighValueGift.value && props.gift) {
     content = `谢谢${userName}送出的${props.gift.name}`;
   } else if (props.method === CastMethod.ROOM_MESSAGE) {
@@ -113,8 +113,19 @@ const getTextContent = (): string => {
     if (!rawContent.startsWith('恭喜')) {
       content = `谢谢${rawContent}`;
     }
+  } else if (props.method === CastMethod.EXHIBITION_CHAT) {
+    // 冠名消息：谢谢 XX 冠名了 YY
+    const rawContent = props.content || '';
+    if (rawContent.includes('成功冠名了')) {
+      content = rawContent.replace('成功冠名了', '冠名了');
+    } else {
+      content = rawContent;
+    }
+    if (!content.startsWith('谢谢') && !content.startsWith('恭喜')) {
+      content = `谢谢${content}`;
+    }
   }
-  
+
   return content;
 };
 

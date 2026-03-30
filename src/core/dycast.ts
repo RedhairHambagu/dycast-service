@@ -1286,31 +1286,28 @@ export class DyCast {
           break;
         case CastMethod.EXHIBITION_CHAT:
           // msgType: exhibition_naming_chat_message_v2(冠名), exhibition_lighten_chat_message_v2(点亮)
-          // userId 在 Field 3 (u64)，无 nickname
-          // 礼物名称在 ExhibitionChatMessage Field 4 (string)
           // payload 是 WebcastExhibitionChatMessage，需要先解码外层，再取 exhibition 字段
+          // Field 6: template, Field 4[0].userContent.nickname, Field 4[1].text
           const webcastExhibition = decodeWebcastExhibitionChatMessage(payload);
           const exhibition = webcastExhibition.exhibition || {} as any;
           data.method = CastMethod.EXHIBITION_CHAT;
-          data.user = { name: exhibition.userId || '用户' };
           const exTemplate = exhibition.template || '';
-          const exGiftName = exhibition.giftName || '';
           if (exhibition.msgType === 'exhibition_naming_chat_message_v2') {
             // 冠名：{0:user} 成功冠名了{1:string}{2:image}
-            const userName = exhibition.userId || '用户';
+            const exUserName = exhibition.contents?.[0]?.userContent?.nickname || '用户';
+            const exGiftName = exhibition.contents?.[1]?.text || '';
             data.content = exTemplate
-              .replace('{0:user}', userName)
+              .replace('{0:user}', exUserName)
               .replace('{1:string}', exGiftName)
               .replace('{2:image}', '');
           } else if (exhibition.msgType === 'exhibition_lighten_chat_message_v2') {
-            // 点亮：恭喜主播成功点亮了{0:string}{1:image}
+            // 点亮：{0:string}{1:image} -> contents[0].text 是礼物名称
+            const exGiftName = exhibition.contents?.[0]?.text || '';
             data.content = exTemplate
               .replace('{0:string}', exGiftName)
               .replace('{1:image}', '');
           } else {
-            const payloadBase64 = btoa(String.fromCharCode(...payload));
-            CLog.debug(`[EXHIBITION] payload_base64: ${payloadBase64}`);
-            data.content = exTemplate || exGiftName || '展馆消息';
+            data.content = exTemplate || '展馆消息';
           }
           processed = true;
           break;
