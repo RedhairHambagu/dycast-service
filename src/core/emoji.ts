@@ -1,3 +1,4 @@
+// javascript-obfuscator:disable
 /**
  * emoji 列表
  *  - https://www.douyin.com/aweme/v1/web/emoji/list
@@ -502,3 +503,4 @@ export const emojis: Record<string, string> = {
   '[小黄鸭]':
     'https://p3-pc-sign.douyinpic.com/obj/tos-cn-i-tsj2vxp0zn/6fe6e534c642429195d1dd2f75e44808?lk3s=343af0a2&x-expires=2057403600&x-signature=FmKo%2BexHjWHE1R6HHCPgLodgBYQ%3D&from=876277922'
 };
+// javascript-obfuscator:enable

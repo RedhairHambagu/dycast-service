@@ -46,6 +46,7 @@
 </template>
 
 <script setup lang="ts">
+// javascript-obfuscator:disable
 import CastTypeBtn from '@/components/CastTypeBtn/index.vue';
 import { computed, nextTick, onMounted, ref } from 'vue';
 import type { CastType } from './CastTypeBtn/type';
@@ -224,6 +225,7 @@ defineExpose({
   appendCasts,
   clearCasts
 });
+// javascript-obfuscator:enable
 </script>
 
 <style lang="scss" scoped>

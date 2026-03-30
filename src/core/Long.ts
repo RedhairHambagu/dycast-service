@@ -1,3 +1,4 @@
+// javascript-obfuscator:disable
 /**
  * @file
  * 魔改缩小的 long.js
@@ -664,3 +665,4 @@ function fromValue(val: Long | number | string, unsigned?: boolean) {
 function isLong(obj: any): obj is Long {
   return (obj && obj['__isLong__']) === true;
 }
+// javascript-obfuscator:enable
