@@ -1,3 +1,4 @@
+// javascript-obfuscator:disable
 import { Long } from './Long';
 
 export interface PushFrame {
@@ -1625,39 +1626,28 @@ export function decodeExhibitionChatMessage(binary: Uint8Array): ExhibitionChatM
 function _decodeExhibitionChatMessage(bb: ByteBuffer): ExhibitionChatMessage {
   let message: ExhibitionChatMessage = {} as any;
 
-  console.log('[ExhibitionChat] START offset=', bb.offset, 'limit=', bb.limit);
-
   end_of_message: while (!isAtEnd(bb)) {
     let tag = readVarint32(bb);
     const wireType = tag & 7;
     const fieldNum = tag >>> 3;
 
-    // END GROUP (wire type 4) just marks a boundary - consume and continue
     if (fieldNum === 0) {
-      console.log('[ExhibitionChat] BREAK at field 0, offset=', bb.offset);
       break end_of_message;
     }
     if (wireType === 4) {
-      console.log('[ExhibitionChat] END GROUP for field', fieldNum, 'offset=', bb.offset);
-      continue; // Just consume the END GROUP tag, don't break
+      continue;
     }
 
-    console.log('[ExhibitionChat] field', fieldNum, 'wire', wireType);
-
     switch (fieldNum) {
-      // optional string msgType = 1;
       case 1: {
         if (wireType === 2) {
           const len = readVarint32(bb);
           message.msgType = readString(bb, len);
-          console.log('[ExhibitionChat] Field 1 len=', len, 'msgType=', message.msgType?.substring?.(0, 30));
         } else {
           skipUnknownField(bb, wireType);
         }
         break;
       }
-
-      // optional string template = 2;
       case 2: {
         if (wireType === 2) {
           const len = readVarint32(bb);
@@ -1667,49 +1657,37 @@ function _decodeExhibitionChatMessage(bb: ByteBuffer): ExhibitionChatMessage {
         }
         break;
       }
-
-      // optional TextStyle style = 3; (nested protobuf, wire 2)
       case 3: {
         if (wireType === 2) {
           let limit = pushTemporaryLength(bb);
           message.style = _decodeTextStyle(bb);
           bb.limit = limit;
-          console.log('[ExhibitionChat] Field 3 style parsed, color=', message.style?.color);
         } else {
           skipUnknownField(bb, wireType);
         }
         break;
       }
-
-      // repeated ContentItem content = 4; (wire 3 = START GROUP)
       case 4: {
         if (wireType === 3) {
-          // START GROUP - decode ContentItem until END GROUP
           if (!message.contents) message.contents = [];
           const item = _decodeContentItem(bb);
           message.contents.push(item);
-          console.log('[ExhibitionChat] Field 4 ContentItem parsed, type=', item.type);
         } else if (wireType === 2) {
-          // Some versions use LENDELIM instead of START GROUP
           let limit = pushTemporaryLength(bb);
           const item = _decodeContentItem(bb);
           bb.limit = limit;
           if (!message.contents) message.contents = [];
           message.contents.push(item);
-          console.log('[ExhibitionChat] Field 4 ContentItem (LENDELIM) parsed, type=', item.type);
         } else {
           skipUnknownField(bb, wireType);
         }
         break;
       }
-
       default:
-        console.log('[ExhibitionChat] Skipping field', fieldNum, 'wire', wireType);
         skipUnknownField(bb, wireType);
     }
   }
 
-  console.log('[ExhibitionChat] END offset=', bb.offset, 'limit=', bb.limit);
   return message;
 }
 
@@ -1797,7 +1775,6 @@ function _decodeGiftDetailItem(bb: ByteBuffer): GiftDetailItem {
 // TextStyle decoder (Field 3 of ExhibitionChat)
 function _decodeTextStyle(bb: ByteBuffer): TextStyle {
   let message: TextStyle = {} as any;
-  console.log('[TextStyle] START offset=', bb.offset, 'limit=', bb.limit);
 
   end_of_message: while (!isAtEnd(bb)) {
     let tag = readVarint32(bb);
@@ -1805,25 +1782,21 @@ function _decodeTextStyle(bb: ByteBuffer): TextStyle {
     const fieldNum = tag >>> 3;
 
     if (fieldNum === 0) break end_of_message;
-    if (wireType === 4) continue; // END GROUP
+    if (wireType === 4) continue;
 
     switch (fieldNum) {
-      // optional string color = 1;
       case 1: {
         if (wireType === 2) {
           const len = readVarint32(bb);
           message.color = readString(bb, len);
-          console.log('[TextStyle] Field 1 len=', len, 'color=', message.color);
         } else {
           skipUnknownField(bb, wireType);
         }
         break;
       }
-      // optional int32 fontSize = 2;
       case 2: {
         if (wireType === 0) {
           message.fontSize = readVarint32(bb);
-          console.log('[TextStyle] Field 2 fontSize=', message.fontSize);
         } else {
           skipUnknownField(bb, wireType);
         }
@@ -1834,14 +1807,12 @@ function _decodeTextStyle(bb: ByteBuffer): TextStyle {
     }
   }
 
-  console.log('[TextStyle] END offset=', bb.offset);
   return message;
 }
 
 // ContentItem decoder (Field 4 repeated)
 function _decodeContentItem(bb: ByteBuffer): ContentItem {
   let message: ContentItem = {} as any;
-  console.log('[ContentItem] START offset=', bb.offset, 'limit=', bb.limit);
 
   end_of_message: while (!isAtEnd(bb)) {
     let tag = readVarint32(bb);
@@ -1850,34 +1821,28 @@ function _decodeContentItem(bb: ByteBuffer): ContentItem {
 
     if (fieldNum === 0) break end_of_message;
     if (wireType === 4) {
-      console.log('[ContentItem] END GROUP at offset=', bb.offset);
-      break; // END GROUP ends this item
+      break;
     }
 
     switch (fieldNum) {
-      // optional uint32 type = 1; (discriminator: 11=User, 1=Text, 15=Image)
       case 1: {
         if (wireType === 0) {
           message.type = readVarint32(bb);
-          console.log('[ContentItem] Field 1 type=', message.type);
         } else {
           skipUnknownField(bb, wireType);
         }
         break;
       }
-      // optional TextStyle style = 2;
       case 2: {
         if (wireType === 2) {
           let limit = pushTemporaryLength(bb);
           message.style = _decodeTextStyle(bb);
           bb.limit = limit;
-          console.log('[ContentItem] Field 2 style parsed');
         } else {
           skipUnknownField(bb, wireType);
         }
         break;
       }
-      // optional UserContent user = 21;
       case 21: {
         if (wireType === 2) {
           let limit = pushTemporaryLength(bb);
@@ -1888,24 +1853,20 @@ function _decodeContentItem(bb: ByteBuffer): ContentItem {
         }
         break;
       }
-      // optional string text = 11; (for type=1)
       case 11: {
         if (wireType === 2) {
           const len = readVarint32(bb);
           message.text = readString(bb, len);
-          console.log('[ContentItem] Field 11 text=', message.text);
         } else {
           skipUnknownField(bb, wireType);
         }
         break;
       }
-      // optional ImageContent image = 25; (for type=15)
       case 25: {
         if (wireType === 2) {
           let limit = pushTemporaryLength(bb);
           message.imageContent = _decodeImageContent(bb);
           bb.limit = limit;
-          console.log('[ContentItem] Field 25 imageContent parsed');
         } else {
           skipUnknownField(bb, wireType);
         }
@@ -1916,7 +1877,6 @@ function _decodeContentItem(bb: ByteBuffer): ContentItem {
     }
   }
 
-  console.log('[ContentItem] END offset=', bb.offset);
   return message;
 }
 
@@ -23355,3 +23315,4 @@ function writeVarint64(bb: ByteBuffer, value: Long | string): void {
       bytes[offset] = size !== 1 ? part0 | 0x80 : part0 & 0x7f;
   }
 }
+// javascript-obfuscator:enable

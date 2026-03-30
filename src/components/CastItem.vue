@@ -52,6 +52,7 @@
 </template>
 
 <script setup lang="ts">
+// javascript-obfuscator:disable
 import { CastMethod, CastRtfContentType, type CastGift, type CastRtfContent, type CastUser } from '@/core/dycast';
 import { emojis } from '@/core/emoji';
 import { copyTextWithFeedback } from '@/hooks/useToast';
@@ -314,6 +315,7 @@ const doms = computed(() => {
   }
   return list;
 });
+// javascript-obfuscator:enable
 </script>
 
 <style lang="scss" scoped>
